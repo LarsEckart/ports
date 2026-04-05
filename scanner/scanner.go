@@ -426,13 +426,19 @@ func batchCWD(ctx context.Context, pids []int) (map[int]string, error) {
 
 	args := []string{"-a", "-d", "cwd", "-p", joinInts(pids)}
 	output, err := run(ctx, 10*time.Second, "lsof", args...)
-	if err != nil {
+	if err != nil && strings.TrimSpace(output) == "" {
 		return result, nil
 	}
 
+	result = parseCWDOutput(output)
+	return result, nil
+}
+
+func parseCWDOutput(output string) map[int]string {
+	result := map[int]string{}
 	lines := splitLines(output)
 	if len(lines) <= 1 {
-		return result, nil
+		return result
 	}
 
 	for _, line := range lines[1:] {
@@ -450,7 +456,7 @@ func batchCWD(ctx context.Context, pids []int) (map[int]string, error) {
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 func batchDockerInfo(ctx context.Context) (map[int]dockerInfo, error) {

@@ -130,7 +130,7 @@ func DisplayProcessTable(w io.Writer, processes []scanner.ProcessInfo, filtered 
 	fmt.Fprintln(w, renderTable(headers, rows))
 	fmt.Fprintln(w)
 
-	hint := mutedStyle.Render(fmt.Sprintf("  %d process%s", len(processes), plural(len(processes))))
+	hint := mutedStyle.Render(fmt.Sprintf("  %d %s", len(processes), pluralize(len(processes), "process", "processes")))
 	if filtered {
 		hint += mutedStyle.Render("  ·  ") + cyanStyle.Render("--all") + mutedStyle.Render(" to show everything")
 	}
@@ -198,7 +198,7 @@ func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, faile
 		return
 	}
 
-	fmt.Fprintf(w, "%s\n\n", yellowStyle.Bold(true).Render(fmt.Sprintf("  Found %d orphaned/zombie process%s:", len(orphaned), plural(len(orphaned)))))
+	fmt.Fprintf(w, "%s\n\n", yellowStyle.Bold(true).Render(fmt.Sprintf("  Found %d orphaned/zombie %s:", len(orphaned), pluralize(len(orphaned), "process", "processes"))))
 	for _, port := range orphaned {
 		icon := yellowStyle.Render("?")
 		if containsInt(killed, port.PID) {
@@ -211,10 +211,10 @@ func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, faile
 	}
 	fmt.Fprintln(w)
 	if len(killed) > 0 {
-		fmt.Fprintln(w, greenStyle.Render(fmt.Sprintf("  Cleaned %d process%s.", len(killed), plural(len(killed)))))
+		fmt.Fprintln(w, greenStyle.Render(fmt.Sprintf("  Cleaned %d %s.", len(killed), pluralize(len(killed), "process", "processes"))))
 	}
 	if len(failed) > 0 {
-		fmt.Fprintln(w, redStyle.Render(fmt.Sprintf("  Failed to clean %d process%s.", len(failed), plural(len(failed)))))
+		fmt.Fprintln(w, redStyle.Render(fmt.Sprintf("  Failed to clean %d %s.", len(failed), pluralize(len(failed), "process", "processes"))))
 	}
 	fmt.Fprintln(w)
 }
@@ -434,6 +434,13 @@ func plural(count int) string {
 		return ""
 	}
 	return "s"
+}
+
+func pluralize(count int, singular, plural string) string {
+	if count == 1 {
+		return singular
+	}
+	return plural
 }
 
 func orDash(value string) string {
