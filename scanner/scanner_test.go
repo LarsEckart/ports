@@ -42,7 +42,7 @@ node    42 lars  cwd    DIR   1,15      896    2 /tmp/project with spaces
 }
 
 func TestWatchPortsSkipsInitialListeners(t *testing.T) {
-	initialListener, err := net.Listen("tcp", "127.0.0.1:0")
+	initialListener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to start initial listener: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestWatchPortsSkipsInitialListeners(t *testing.T) {
 	case <-time.After(350 * time.Millisecond):
 	}
 
-	newListener, err := net.Listen("tcp", "127.0.0.1:0")
+	newListener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to start new listener: %v", err)
 	}

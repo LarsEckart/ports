@@ -39,8 +39,9 @@ func TestKillByPort(t *testing.T) {
 	}
 
 	deadline := time.Now().Add(5 * time.Second)
+	dialer := net.Dialer{Timeout: 100 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		conn, err := dialer.DialContext(t.Context(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
 			return
 		}
@@ -95,7 +96,8 @@ func TestKillRequiresDisambiguationWhenPortAndPIDConflict(t *testing.T) {
 	if err := syscall.Kill(target, 0); err != nil {
 		t.Fatalf("expected PID %d to still be alive after ambiguous kill attempt: %v", target, err)
 	}
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", target), 100*time.Millisecond)
+	dialer := net.Dialer{Timeout: 100 * time.Millisecond}
+	conn, err := dialer.DialContext(t.Context(), "tcp", fmt.Sprintf("127.0.0.1:%d", target))
 	if err != nil {
 		t.Fatalf("expected listener on port %d to still be alive after ambiguous kill attempt: %v", target, err)
 	}

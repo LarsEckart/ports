@@ -63,7 +63,7 @@ func runCLIWithEnv(t *testing.T, env []string, args ...string) (string, string, 
 
 func freePort(t *testing.T) int {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to allocate free port: %v", err)
 	}
@@ -74,8 +74,9 @@ func freePort(t *testing.T) int {
 func waitForPort(t *testing.T, port int, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	dialer := net.Dialer{Timeout: 100 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		conn, err := dialer.DialContext(t.Context(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			_ = conn.Close()
 			return
