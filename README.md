@@ -28,12 +28,12 @@ make install
 ```bash
 ports
 ports --all
-ports 3000
+ports <port>
 ports ps
 ports ps --all
-ports kill 3000
-ports kill --pid 3000
-ports kill --port 3000
+ports kill <port-or-pid>
+ports kill --pid <pid>
+ports kill --port <port>
 ports clean --yes
 ports watch
 ```

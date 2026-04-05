@@ -309,18 +309,32 @@ func KillProcess(pid int, force bool) error {
 }
 
 func WatchPorts(ctx context.Context, interval time.Duration, callback func(eventType string, info PortInfo)) error {
-	var previous map[int]PortInfo
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	emit := func() error {
+	snapshot := func() (map[int]PortInfo, error) {
 		ports, err := GetListeningPorts(ctx, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		current := make(map[int]PortInfo, len(ports))
 		for _, port := range ports {
 			current[port.Port] = port
+		}
+		return current, nil
+	}
+
+	previous, err := snapshot()
+	if err != nil {
+		return err
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	emit := func() error {
+		current, err := snapshot()
+		if err != nil {
+			return err
+		}
+		for _, port := range current {
 			if _, ok := previous[port.Port]; !ok {
 				callback("new", port)
 			}
@@ -332,11 +346,6 @@ func WatchPorts(ctx context.Context, interval time.Duration, callback func(event
 		}
 		previous = current
 		return nil
-	}
-
-	previous = map[int]PortInfo{}
-	if err := emit(); err != nil {
-		return err
 	}
 
 	for {
