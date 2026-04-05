@@ -17,6 +17,7 @@ func KillCmd() *cli.Command {
 		Usage:              "Kill by port or PID",
 		UsageText:          "ports kill [options] <port|pid> [port|pid...]",
 		CustomHelpTemplate: commandHelpTemplateNoGlobals,
+		OnUsageError:       onUsageError,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
@@ -25,25 +26,23 @@ func KillCmd() *cli.Command {
 			},
 			&cli.BoolFlag{
 				Name:  "pid",
+				Local: true,
 				Usage: "Interpret every argument as a PID",
 			},
 			&cli.BoolFlag{
 				Name:  "port",
+				Local: true,
 				Usage: "Interpret every argument as a port",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			if err := rejectUnsupportedAllFlag(cmd); err != nil {
-				return err
-			}
-
 			args := cmd.Args().Slice()
 			if len(args) == 0 {
-				return exitWith("usage: ports kill [-f|--force] [--pid|--port] <port|pid> [port|pid...]", 1)
+				return usageErrorWithHelp(ctx, cmd, "usage: ports kill [-f|--force] [--pid|--port] <port|pid> [port|pid...]")
 			}
 
 			if cmd.Bool("pid") && cmd.Bool("port") {
-				return exitWith("choose only one of --pid or --port", 1)
+				return usageErrorWithHelp(ctx, cmd, "choose only one of --pid or --port")
 			}
 
 			force := cmd.Bool("force")
@@ -115,7 +114,7 @@ func KillCmd() *cli.Command {
 			fmt.Println()
 
 			if anyFailed {
-				return exitWith("", 1)
+				return exitWith("", exitCodeFailure)
 			}
 			return nil
 		},

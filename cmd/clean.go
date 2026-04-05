@@ -15,6 +15,7 @@ func CleanCmd() *cli.Command {
 		Name:               "clean",
 		Usage:              "Kill orphaned or zombie dev processes",
 		CustomHelpTemplate: commandHelpTemplateNoGlobals,
+		OnUsageError:       onUsageError,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "yes",
@@ -28,10 +29,6 @@ func CleanCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			if err := rejectUnsupportedAllFlag(cmd); err != nil {
-				return err
-			}
-
 			orphaned, err := scanner.FindOrphanedProcesses(ctx)
 			if err != nil {
 				return err
@@ -70,7 +67,7 @@ func CleanCmd() *cli.Command {
 
 			render.DisplayCleanResults(os.Stdout, orphaned, killed, failed)
 			if len(failed) > 0 {
-				return exitWith("", 1)
+				return exitWith("", exitCodeFailure)
 			}
 			return nil
 		},

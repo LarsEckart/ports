@@ -13,10 +13,20 @@ import (
 )
 
 func NewApp() *cli.Command {
+	cli.VersionFlag = &cli.BoolFlag{
+		Name:        "version",
+		Usage:       "print the version",
+		HideDefault: true,
+		Local:       true,
+	}
+
 	return &cli.Command{
-		Name:      "ports",
-		Usage:     "See what is listening on your machine",
-		UsageText: "ports [global options] [<port>|<command> [command options]]",
+		Name:                          "ports",
+		Usage:                         "See what is listening on your machine",
+		UsageText:                     "ports [options] [<port>|<command> [command options]]",
+		Version:                       appVersion(),
+		CustomRootCommandHelpTemplate: rootHelpTemplateNoGlobals,
+		OnUsageError:                  onUsageError,
 		Description: `A fast Go CLI for developers who want to know what is bound to their ports.
 
 Examples:
@@ -33,6 +43,7 @@ Examples:
 			&cli.BoolFlag{
 				Name:    "all",
 				Aliases: []string{"a"},
+				Local:   true,
 				Usage:   "Show all listening ports, not just dev-ish ones",
 			},
 		},
@@ -71,13 +82,13 @@ func rootAction(ctx context.Context, cmd *cli.Command) error {
 			}
 			render.DisplayPortDetail(os.Stdout, info)
 			if info == nil {
-				return exitWith("", 1)
+				return exitWith("", exitCodeFailure)
 			}
 			return nil
 		}
 	}
 
-	return exitWith(fmt.Sprintf("unknown command or argument: %s", args[0]), 1)
+	return usageErrorWithHelp(ctx, cmd, fmt.Sprintf("unknown command or argument: %s", args[0]))
 }
 
 func filterDevPorts(ports []scanner.PortInfo) []scanner.PortInfo {

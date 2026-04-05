@@ -15,10 +15,12 @@ func PSCmd() *cli.Command {
 		Name:               "ps",
 		Usage:              "Show running processes, not just listening ports",
 		CustomHelpTemplate: commandHelpTemplateNoGlobals,
+		OnUsageError:       onUsageError,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "all",
 				Aliases: []string{"a"},
+				Local:   true,
 				Usage:   "Show all processes, not just dev-ish ones",
 			},
 		},

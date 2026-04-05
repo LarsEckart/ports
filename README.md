@@ -19,9 +19,15 @@ It is very much inspired by [port-whisperer](https://github.com/LarsenCundric/po
 
 ## Installation
 
+### From source
+
 ```bash
 make install
 ```
+
+### Download a release binary
+
+Pre-built macOS binaries for Apple Silicon and Intel are available on the [Releases](https://github.com/LarsEckart/ports/releases) page.
 
 ## Usage
 
