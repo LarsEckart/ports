@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Go build artifacts
+/ports
+/bin/
+/dist/
+*.test
+*.out
+coverage.out
+cover.out
+
+# IDE/editor files
+.vscode/
+.idea/
