@@ -3,10 +3,13 @@
 - Architecture: keep `cmd/` thin; command files should parse flags/args, call `scanner`, and hand final presentation to `render`.
 - Runtime model: this tool is macOS-first and shells out to `lsof`, `ps`, `docker ps`, and `git`; there is no database, API server, or persisted app state.
 - Internal APIs: `scanner.PortInfo`, `scanner.ProcessInfo`, `scanner.KillTarget`, and `scanner.PortStatus` are the main cross-package data contracts.
-- Build: `make build`
-- Install locally: `make install`
 - Format: `make fmt`
-- Check/Test/Verify everything: `make check`
+- Lint: `make lint`
+- Test: `make test`
+- Build: `make build`
+- Check: `make check`
+- Install locally: `make install`
+- `make build` formats first; `make check` runs lint, test, then build.
 - Single-test runs are not wrapped by the current `Makefile`; prefer adding a focused make target before documenting raw toolchain commands.
 - Test layout: `scanner/*_test.go` covers pure detection logic; `tests/` builds the binary in `TestMain` and exercises real subprocess/listener behavior through the CLI.
 - Types: prefer concrete structs/enums over loose interfaces; keep shared scanner models in `scanner/types.go` instead of duplicating shapes.

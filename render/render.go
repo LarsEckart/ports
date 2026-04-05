@@ -66,14 +66,22 @@ var frameworkStyles = map[string]lipgloss.Style{
 	"MinIO":         redStyle,
 }
 
+func fprintln(w io.Writer, args ...any) {
+	_, _ = fmt.Fprintln(w, args...)
+}
+
+func fprintf(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
 func DisplayPortTable(w io.Writer, ports []scanner.PortInfo, filtered bool) {
 	renderHeader(w)
 	if len(ports) == 0 {
-		fmt.Fprintln(w, mutedStyle.Render("  No active listening ports found."))
-		fmt.Fprintln(w)
+		fprintln(w, mutedStyle.Render("  No active listening ports found."))
+		fprintln(w)
 		if filtered {
-			fmt.Fprintln(w, mutedStyle.Render("  Run ports --all to show everything."))
-			fmt.Fprintln(w)
+			fprintln(w, mutedStyle.Render("  Run ports --all to show everything."))
+			fprintln(w)
 		}
 		return
 	}
@@ -92,23 +100,23 @@ func DisplayPortTable(w io.Writer, ports []scanner.PortInfo, filtered bool) {
 	}
 
 	headers := []string{"PORT", "PROCESS", "PID", "PROJECT", "FRAMEWORK", "UPTIME", "STATUS"}
-	fmt.Fprintln(w, renderTable(headers, rows))
-	fmt.Fprintln(w)
+	fprintln(w, renderTable(headers, rows))
+	fprintln(w)
 
 	hint := mutedStyle.Render(fmt.Sprintf("  %d port%s active", len(ports), plural(len(ports)))) +
 		mutedStyle.Render("  ·  Run ") + cyanStyle.Render("ports <number>") + mutedStyle.Render(" for details")
 	if filtered {
 		hint += mutedStyle.Render("  ·  ") + cyanStyle.Render("--all") + mutedStyle.Render(" to show everything")
 	}
-	fmt.Fprintln(w, hint)
-	fmt.Fprintln(w)
+	fprintln(w, hint)
+	fprintln(w)
 }
 
 func DisplayProcessTable(w io.Writer, processes []scanner.ProcessInfo, filtered bool) {
 	renderHeader(w)
 	if len(processes) == 0 {
-		fmt.Fprintln(w, mutedStyle.Render("  No matching processes found."))
-		fmt.Fprintln(w)
+		fprintln(w, mutedStyle.Render("  No matching processes found."))
+		fprintln(w)
 		return
 	}
 
@@ -127,28 +135,28 @@ func DisplayProcessTable(w io.Writer, processes []scanner.ProcessInfo, filtered 
 	}
 
 	headers := []string{"PID", "PROCESS", "CPU%", "MEM", "PROJECT", "FRAMEWORK", "UPTIME", "WHAT"}
-	fmt.Fprintln(w, renderTable(headers, rows))
-	fmt.Fprintln(w)
+	fprintln(w, renderTable(headers, rows))
+	fprintln(w)
 
 	hint := mutedStyle.Render(fmt.Sprintf("  %d %s", len(processes), pluralize(len(processes), "process", "processes")))
 	if filtered {
 		hint += mutedStyle.Render("  ·  ") + cyanStyle.Render("--all") + mutedStyle.Render(" to show everything")
 	}
-	fmt.Fprintln(w, hint)
-	fmt.Fprintln(w)
+	fprintln(w, hint)
+	fprintln(w)
 }
 
 func DisplayPortDetail(w io.Writer, info *scanner.PortInfo) {
 	renderHeader(w)
 	if info == nil {
-		fmt.Fprintln(w, redStyle.Render("  No process found on that port."))
-		fmt.Fprintln(w)
+		fprintln(w, redStyle.Render("  No process found on that port."))
+		fprintln(w)
 		return
 	}
 
-	fmt.Fprintln(w, whiteStyle.Bold(true).Render(fmt.Sprintf("  Port :%d", info.Port)))
-	fmt.Fprintln(w, mutedStyle.Render("  ──────────────────────"))
-	fmt.Fprintln(w)
+	fprintln(w, whiteStyle.Bold(true).Render(fmt.Sprintf("  Port :%d", info.Port)))
+	fprintln(w, mutedStyle.Render("  ──────────────────────"))
+	fprintln(w)
 
 	printField(w, "Process", whiteStyle.Bold(true).Render(orDash(info.ProcessName)))
 	printField(w, "PID", mutedStyle.Render(fmt.Sprintf("%d", info.PID)))
@@ -160,17 +168,17 @@ func DisplayPortDetail(w io.Writer, info *scanner.PortInfo) {
 		printField(w, "Started", mutedStyle.Render(info.StartTime.In(time.Local).Format(time.RFC1123)))
 	}
 
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, titleStyle.Render("  Location"))
-	fmt.Fprintln(w, mutedStyle.Render("  ──────────────────────"))
+	fprintln(w)
+	fprintln(w, titleStyle.Render("  Location"))
+	fprintln(w, mutedStyle.Render("  ──────────────────────"))
 	printField(w, "Directory", styledPath(info.CWD))
 	printField(w, "Project", whiteStyle.Render(orDash(info.ProjectName)))
 	printField(w, "Git Branch", styledBranch(info.GitBranch))
 
 	if len(info.ProcessTree) > 0 {
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, titleStyle.Render("  Process Tree"))
-		fmt.Fprintln(w, mutedStyle.Render("  ──────────────────────"))
+		fprintln(w)
+		fprintln(w, titleStyle.Render("  Process Tree"))
+		fprintln(w, mutedStyle.Render("  ──────────────────────"))
 		for i, node := range info.ProcessTree {
 			indent := strings.Repeat("  ", i)
 			prefix := "└─"
@@ -181,24 +189,24 @@ func DisplayPortDetail(w io.Writer, info *scanner.PortInfo) {
 			if node.PID == info.PID {
 				name = whiteStyle.Bold(true).Render(node.Name)
 			}
-			fmt.Fprintf(w, "  %s%s %s %s\n", indent, mutedStyle.Render(prefix), name, mutedStyle.Render(fmt.Sprintf("(%d)", node.PID)))
+			fprintf(w, "  %s%s %s %s\n", indent, mutedStyle.Render(prefix), name, mutedStyle.Render(fmt.Sprintf("(%d)", node.PID)))
 		}
 	}
 
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, mutedStyle.Render("  Kill this process with ")+cyanStyle.Render(fmt.Sprintf("ports kill %d", info.Port)))
-	fmt.Fprintln(w)
+	fprintln(w)
+	fprintln(w, mutedStyle.Render("  Kill this process with ")+cyanStyle.Render(fmt.Sprintf("ports kill %d", info.Port)))
+	fprintln(w)
 }
 
 func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, failed []int) {
 	renderHeader(w)
 	if len(orphaned) == 0 {
-		fmt.Fprintln(w, greenStyle.Render("  ✓ No orphaned or zombie dev processes found."))
-		fmt.Fprintln(w)
+		fprintln(w, greenStyle.Render("  ✓ No orphaned or zombie dev processes found."))
+		fprintln(w)
 		return
 	}
 
-	fmt.Fprintf(w, "%s\n\n", yellowStyle.Bold(true).Render(fmt.Sprintf("  Found %d orphaned/zombie %s:", len(orphaned), pluralize(len(orphaned), "process", "processes"))))
+	fprintf(w, "%s\n\n", yellowStyle.Bold(true).Render(fmt.Sprintf("  Found %d orphaned/zombie %s:", len(orphaned), pluralize(len(orphaned), "process", "processes"))))
 	for _, port := range orphaned {
 		icon := yellowStyle.Render("?")
 		if containsInt(killed, port.PID) {
@@ -207,23 +215,23 @@ func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, faile
 		if containsInt(failed, port.PID) {
 			icon = redStyle.Render("✕")
 		}
-		fmt.Fprintf(w, "  %s %s %s %s\n", icon, whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", port.Port)), mutedStyle.Render("—"), mutedStyle.Render(fmt.Sprintf("%s (PID %d)", port.ProcessName, port.PID)))
+		fprintf(w, "  %s %s %s %s\n", icon, whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", port.Port)), mutedStyle.Render("—"), mutedStyle.Render(fmt.Sprintf("%s (PID %d)", port.ProcessName, port.PID)))
 	}
-	fmt.Fprintln(w)
+	fprintln(w)
 	if len(killed) > 0 {
-		fmt.Fprintln(w, greenStyle.Render(fmt.Sprintf("  Cleaned %d %s.", len(killed), pluralize(len(killed), "process", "processes"))))
+		fprintln(w, greenStyle.Render(fmt.Sprintf("  Cleaned %d %s.", len(killed), pluralize(len(killed), "process", "processes"))))
 	}
 	if len(failed) > 0 {
-		fmt.Fprintln(w, redStyle.Render(fmt.Sprintf("  Failed to clean %d %s.", len(failed), pluralize(len(failed), "process", "processes"))))
+		fprintln(w, redStyle.Render(fmt.Sprintf("  Failed to clean %d %s.", len(failed), pluralize(len(failed), "process", "processes"))))
 	}
-	fmt.Fprintln(w)
+	fprintln(w)
 }
 
 func DisplayWatchHeader(w io.Writer) {
 	renderHeader(w)
-	fmt.Fprintln(w, titleStyle.Render("  Watching for port changes..."))
-	fmt.Fprintln(w, mutedStyle.Render("  Press Ctrl+C to stop"))
-	fmt.Fprintln(w)
+	fprintln(w, titleStyle.Render("  Watching for port changes..."))
+	fprintln(w, mutedStyle.Render("  Press Ctrl+C to stop"))
+	fprintln(w)
 }
 
 func DisplayWatchEvent(w io.Writer, eventType string, info scanner.PortInfo) {
@@ -238,20 +246,20 @@ func DisplayWatchEvent(w io.Writer, eventType string, info scanner.PortInfo) {
 		if info.Framework != "" {
 			framework = " " + formatFramework(info.Framework)
 		}
-		fmt.Fprintf(w, "  %s %s %s ← %s%s%s\n", timestamp, greenStyle.Render("▲ NEW"), whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", info.Port)), whiteStyle.Render(info.ProcessName), project, framework)
+		fprintf(w, "  %s %s %s ← %s%s%s\n", timestamp, greenStyle.Render("▲ NEW"), whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", info.Port)), whiteStyle.Render(info.ProcessName), project, framework)
 	case "removed":
-		fmt.Fprintf(w, "  %s %s %s\n", timestamp, redStyle.Render("▼ CLOSED"), whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", info.Port)))
+		fprintf(w, "  %s %s %s\n", timestamp, redStyle.Render("▼ CLOSED"), whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", info.Port)))
 	}
 }
 
 func renderHeader(w io.Writer) {
 	border := strings.Repeat("─", 33)
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, cyanStyle.Bold(true).Render(" ┌"+border+"┐"))
-	fmt.Fprintln(w, cyanStyle.Bold(true).Render(" │")+whiteStyle.Bold(true).Render(padToWidth("  ports", 33))+cyanStyle.Bold(true).Render("│"))
-	fmt.Fprintln(w, cyanStyle.Bold(true).Render(" │")+mutedStyle.Render(padToWidth("  what is listening right now", 33))+cyanStyle.Bold(true).Render("│"))
-	fmt.Fprintln(w, cyanStyle.Bold(true).Render(" └"+border+"┘"))
-	fmt.Fprintln(w)
+	fprintln(w)
+	fprintln(w, cyanStyle.Bold(true).Render(" ┌"+border+"┐"))
+	fprintln(w, cyanStyle.Bold(true).Render(" │")+whiteStyle.Bold(true).Render(padToWidth("  ports", 33))+cyanStyle.Bold(true).Render("│"))
+	fprintln(w, cyanStyle.Bold(true).Render(" │")+mutedStyle.Render(padToWidth("  what is listening right now", 33))+cyanStyle.Bold(true).Render("│"))
+	fprintln(w, cyanStyle.Bold(true).Render(" └"+border+"┘"))
+	fprintln(w)
 }
 
 func renderTable(headers []string, rows [][]string) string {
@@ -411,7 +419,7 @@ func humanDuration(value time.Duration) string {
 }
 
 func printField(w io.Writer, label, value string) {
-	fmt.Fprintf(w, "  %-14s %s\n", mutedStyle.Render(label), value)
+	fprintf(w, "  %-14s %s\n", mutedStyle.Render(label), value)
 }
 
 func padToWidth(text string, width int) string {

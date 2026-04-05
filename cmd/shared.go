@@ -75,7 +75,7 @@ func exitWith(message string, code int) error {
 }
 
 func usageErrorWithHelp(ctx context.Context, cmd *cli.Command, message string) error {
-	fmt.Fprintf(cmd.Root().ErrWriter, "Incorrect Usage: %s\n\n", message)
+	_, _ = fmt.Fprintf(cmd.Root().ErrWriter, "Incorrect Usage: %s\n\n", message)
 
 	if err := showUsageHelp(ctx, cmd); err != nil {
 		return err
