@@ -1,0 +1,15 @@
+# Repository guidance for coding agents
+- Stack: Go 1.25 CLI named `ports`; entrypoint is `main.go`, command registration lives in `cmd/`, OS inspection lives in `scanner/`, and terminal rendering lives in `render/`.
+- Architecture: keep `cmd/` thin; command files should parse flags/args, call `scanner`, and hand final presentation to `render`.
+- Runtime model: this tool is macOS-first and shells out to `lsof`, `ps`, `docker ps`, and `git`; there is no database, API server, or persisted app state.
+- Internal APIs: `scanner.PortInfo`, `scanner.ProcessInfo`, `scanner.KillTarget`, and `scanner.PortStatus` are the main cross-package data contracts.
+- Build: `make build`
+- Install locally: `make install`
+- Format: `make fmt`
+- Check/Test/Verify everything: `make check`
+- Single-test runs are not wrapped by the current `Makefile`; prefer adding a focused make target before documenting raw toolchain commands.
+- Test layout: `scanner/*_test.go` covers pure detection logic; `tests/` builds the binary in `TestMain` and exercises real subprocess/listener behavior through the CLI.
+- Types: prefer concrete structs/enums over loose interfaces; keep shared scanner models in `scanner/types.go` instead of duplicating shapes.
+- Errors: wrap system-command failures with context using `fmt.Errorf("action: %w", err)`; use `exitWith` for intentional CLI exit codes/messages.
+- Output: keep ANSI/lipgloss formatting in `render`; avoid printing from `scanner` so data collection stays testable.
+- Behavior: preserve deterministic sorting/deduping of ports/processes and keep shell-parsing changes conservative because tests rely on real OS command output.
