@@ -12,8 +12,9 @@ import (
 
 func PSCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "ps",
-		Usage: "Show running processes, not just listening ports",
+		Name:               "ps",
+		Usage:              "Show running processes, not just listening ports",
+		CustomHelpTemplate: commandHelpTemplateNoGlobals,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "all",

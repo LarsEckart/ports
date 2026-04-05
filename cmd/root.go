@@ -14,16 +14,19 @@ import (
 
 func NewApp() *cli.Command {
 	return &cli.Command{
-		Name:  "ports",
-		Usage: "See what is listening on your machine",
+		Name:      "ports",
+		Usage:     "See what is listening on your machine",
+		UsageText: "ports [global options] [<port>|<command> [command options]]",
 		Description: `A fast Go CLI for developers who want to know what is bound to their ports.
 
 Examples:
   ports
   ports --all
-  ports 3000
+  ports <port>
   ports ps
-  ports kill 3000
+  ports kill <port-or-pid>
+  ports kill --pid <pid>
+  ports kill --port <port>
   ports clean --yes
   ports watch`,
 		Flags: []cli.Flag{

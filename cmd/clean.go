@@ -12,8 +12,9 @@ import (
 
 func CleanCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "clean",
-		Usage: "Kill orphaned or zombie dev processes",
+		Name:               "clean",
+		Usage:              "Kill orphaned or zombie dev processes",
+		CustomHelpTemplate: commandHelpTemplateNoGlobals,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "yes",
@@ -27,6 +28,10 @@ func CleanCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := rejectUnsupportedAllFlag(cmd); err != nil {
+				return err
+			}
+
 			orphaned, err := scanner.FindOrphanedProcesses(ctx)
 			if err != nil {
 				return err

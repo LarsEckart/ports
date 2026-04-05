@@ -14,8 +14,9 @@ import (
 
 func WatchCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "watch",
-		Usage: "Monitor port changes in real time",
+		Name:               "watch",
+		Usage:              "Monitor port changes in real time",
+		CustomHelpTemplate: commandHelpTemplateNoGlobals,
 		Flags: []cli.Flag{
 			&cli.DurationFlag{
 				Name:  "interval",
@@ -24,6 +25,10 @@ func WatchCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := rejectUnsupportedAllFlag(cmd); err != nil {
+				return err
+			}
+
 			watchCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 			defer stop()
 

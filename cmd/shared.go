@@ -5,7 +5,26 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/urfave/cli/v3"
 )
+
+const commandHelpTemplateNoGlobals = `NAME:
+   {{template "helpNameTemplate" .}}
+
+USAGE:
+   {{template "usageTemplate" .}}{{if .Category}}
+
+CATEGORY:
+   {{.Category}}{{end}}{{if .Description}}
+
+DESCRIPTION:
+   {{template "descriptionTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
+
+OPTIONS:{{template "visibleFlagCategoryTemplate" .}}{{else if .VisibleFlags}}
+
+OPTIONS:{{template "visibleFlagTemplate" .}}{{end}}
+`
 
 type exitError struct {
 	code int
@@ -22,6 +41,13 @@ func (e *exitError) ExitCode() int {
 
 func exitWith(message string, code int) error {
 	return &exitError{code: code, msg: message}
+}
+
+func rejectUnsupportedAllFlag(cmd *cli.Command) error {
+	if cmd.Bool("all") {
+		return exitWith("--all is only supported for 'ports' and 'ports ps'", 1)
+	}
+	return nil
 }
 
 func confirm(prompt string) (bool, error) {

@@ -13,8 +13,10 @@ import (
 
 func KillCmd() *cli.Command {
 	return &cli.Command{
-		Name:  "kill",
-		Usage: "Kill by port or PID",
+		Name:               "kill",
+		Usage:              "Kill by port or PID",
+		UsageText:          "ports kill [options] <port|pid> [port|pid...]",
+		CustomHelpTemplate: commandHelpTemplateNoGlobals,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "force",
@@ -31,6 +33,10 @@ func KillCmd() *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := rejectUnsupportedAllFlag(cmd); err != nil {
+				return err
+			}
+
 			args := cmd.Args().Slice()
 			if len(args) == 0 {
 				return exitWith("usage: ports kill [-f|--force] [--pid|--port] <port|pid> [port|pid...]", 1)
