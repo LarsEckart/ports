@@ -70,7 +70,7 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 			PID:         pid,
 			ProcessName: fields[0],
 			RawName:     fields[0],
-			Status:      "healthy",
+			Status:      PortStatusHealthy,
 		})
 
 		if _, ok := seenPIDs[pid]; !ok {
@@ -106,17 +106,17 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		entry := &entries[i]
 		if ps, ok := psMap[entry.PID]; ok {
 			entry.Command = ps.Command
-			entry.Memory = formatMemory(ps.RSSKB)
-			entry.Uptime = humanElapsed(ps.Elapsed)
+			entry.MemoryKB = ps.RSSKB
+			entry.Uptime = elapsedDuration(ps.Elapsed)
 			entry.Framework = DetectFrameworkFromCommand(ps.Command, entry.ProcessName)
 
 			switch {
 			case strings.Contains(ps.Stat, "Z"):
-				entry.Status = "zombie"
+				entry.Status = PortStatusZombie
 			case ps.PPID == 1 && IsDevProcess(entry.ProcessName, ps.Command):
-				entry.Status = "orphaned"
+				entry.Status = PortStatusOrphaned
 			default:
-				entry.Status = "healthy"
+				entry.Status = PortStatusHealthy
 			}
 		}
 
@@ -188,16 +188,17 @@ func GetAllProcesses(ctx context.Context) ([]ProcessInfo, error) {
 		}
 		processName := filepath.Base(parts[0])
 
+		uptime := elapsedDuration(match[4])
+
 		entries = append(entries, ProcessInfo{
 			PID:         pid,
 			ProcessName: processName,
 			Command:     command,
 			Description: SummarizeCommand(command, processName),
 			CPU:         cpu,
-			Memory:      formatMemory(rss),
 			MemoryKB:    rss,
 			Framework:   DetectFrameworkFromCommand(command, processName),
-			Uptime:      humanElapsed(match[4]),
+			Uptime:      uptime,
 		})
 
 		if !isDockerProcess(processName) {
@@ -238,7 +239,7 @@ func FindOrphanedProcesses(ctx context.Context) ([]PortInfo, error) {
 
 	orphaned := make([]PortInfo, 0)
 	for _, port := range ports {
-		if port.Status == "orphaned" || port.Status == "zombie" {
+		if port.Status == PortStatusOrphaned || port.Status == PortStatusZombie {
 			orphaned = append(orphaned, port)
 		}
 	}
@@ -377,7 +378,6 @@ func CollapseDockerProcesses(processes []ProcessInfo) []ProcessInfo {
 		ProcessName: "Docker",
 		Description: fmt.Sprintf("%d processes", len(docker)),
 		CPU:         cpu,
-		Memory:      formatMemory(memoryKB),
 		MemoryKB:    memoryKB,
 		Framework:   "Docker",
 		Uptime:      docker[0].Uptime,
@@ -616,9 +616,9 @@ func isDockerProcess(name string) bool {
 	return strings.HasPrefix(lower, "com.docke") || strings.HasPrefix(lower, "docker")
 }
 
-func humanElapsed(value string) string {
+func elapsedDuration(value string) time.Duration {
 	if value == "" {
-		return ""
+		return 0
 	}
 
 	days := 0
@@ -640,41 +640,8 @@ func humanElapsed(value string) string {
 		minutes, _ = strconv.Atoi(segments[1])
 		seconds, _ = strconv.Atoi(segments[2])
 	default:
-		return value
+		return 0
 	}
 
-	total := time.Duration(days)*24*time.Hour + time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
-	return humanDuration(total)
-}
-
-func humanDuration(d time.Duration) string {
-	if d <= 0 {
-		return "0s"
-	}
-	seconds := int(d.Seconds())
-	minutes := seconds / 60
-	hours := minutes / 60
-	days := hours / 24
-
-	switch {
-	case days > 0:
-		return fmt.Sprintf("%dd %dh", days, hours%24)
-	case hours > 0:
-		return fmt.Sprintf("%dh %dm", hours, minutes%60)
-	case minutes > 0:
-		return fmt.Sprintf("%dm %ds", minutes, seconds%60)
-	default:
-		return fmt.Sprintf("%ds", seconds)
-	}
-}
-
-func formatMemory(rssKB int) string {
-	switch {
-	case rssKB > 1024*1024:
-		return fmt.Sprintf("%.1f GB", float64(rssKB)/(1024*1024))
-	case rssKB > 1024:
-		return fmt.Sprintf("%.1f MB", float64(rssKB)/1024)
-	default:
-		return fmt.Sprintf("%d KB", rssKB)
-	}
+	return time.Duration(days)*24*time.Hour + time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 }

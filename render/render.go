@@ -118,7 +118,7 @@ func DisplayProcessTable(w io.Writer, processes []scanner.ProcessInfo, filtered 
 			mutedStyle.Render(fmt.Sprintf("%d", process.PID)),
 			whiteStyle.Bold(true).Render(truncate(process.ProcessName, 15)),
 			formatCPU(process.CPU),
-			styledMemory(process.Memory),
+			styledMemory(process.MemoryKB),
 			styledProject(process.ProjectName),
 			formatFramework(process.Framework),
 			styledUptime(process.Uptime),
@@ -154,7 +154,7 @@ func DisplayPortDetail(w io.Writer, info *scanner.PortInfo) {
 	printField(w, "PID", mutedStyle.Render(fmt.Sprintf("%d", info.PID)))
 	printField(w, "Status", formatStatus(info.Status))
 	printField(w, "Framework", formatFramework(info.Framework))
-	printField(w, "Memory", styledMemory(info.Memory))
+	printField(w, "Memory", styledMemory(info.MemoryKB))
 	printField(w, "Uptime", styledUptime(info.Uptime))
 	if info.StartTime != nil {
 		printField(w, "Started", mutedStyle.Render(info.StartTime.In(time.Local).Format(time.RFC1123)))
@@ -321,13 +321,13 @@ func formatFramework(value string) string {
 	return style.Render(value)
 }
 
-func formatStatus(value string) string {
+func formatStatus(value scanner.PortStatus) string {
 	switch value {
-	case "healthy":
+	case scanner.PortStatusHealthy:
 		return greenStyle.Render("● healthy")
-	case "orphaned":
+	case scanner.PortStatusOrphaned:
 		return yellowStyle.Render("● orphaned")
-	case "zombie":
+	case scanner.PortStatusZombie:
 		return redStyle.Render("● zombie")
 	default:
 		return mutedStyle.Render("● unknown")
@@ -367,18 +367,47 @@ func styledBranch(value string) string {
 	return pinkStyle.Render(value)
 }
 
-func styledMemory(value string) string {
-	if value == "" {
+func styledMemory(valueKB int) string {
+	if valueKB <= 0 {
 		return mutedStyle.Render("—")
 	}
-	return greenStyle.Render(value)
+	return greenStyle.Render(formatMemory(valueKB))
 }
 
-func styledUptime(value string) string {
-	if value == "" {
+func styledUptime(value time.Duration) string {
+	if value <= 0 {
 		return mutedStyle.Render("—")
 	}
-	return yellowStyle.Render(value)
+	return yellowStyle.Render(humanDuration(value))
+}
+
+func formatMemory(valueKB int) string {
+	switch {
+	case valueKB > 1024*1024:
+		return fmt.Sprintf("%.1f GB", float64(valueKB)/(1024*1024))
+	case valueKB > 1024:
+		return fmt.Sprintf("%.1f MB", float64(valueKB)/1024)
+	default:
+		return fmt.Sprintf("%d KB", valueKB)
+	}
+}
+
+func humanDuration(value time.Duration) string {
+	seconds := int(value.Seconds())
+	minutes := seconds / 60
+	hours := minutes / 60
+	days := hours / 24
+
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hours%24)
+	case hours > 0:
+		return fmt.Sprintf("%dh %dm", hours, minutes%60)
+	case minutes > 0:
+		return fmt.Sprintf("%dm %ds", minutes, seconds%60)
+	default:
+		return fmt.Sprintf("%ds", seconds)
+	}
 }
 
 func printField(w io.Writer, label, value string) {

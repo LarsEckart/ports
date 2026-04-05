@@ -2,6 +2,15 @@ package scanner
 
 import "time"
 
+type PortStatus uint8
+
+const (
+	PortStatusUnknown PortStatus = iota
+	PortStatusHealthy
+	PortStatusOrphaned
+	PortStatusZombie
+)
+
 type PortInfo struct {
 	Port        int
 	PID         int
@@ -11,9 +20,9 @@ type PortInfo struct {
 	CWD         string
 	ProjectName string
 	Framework   string
-	Uptime      string
-	Status      string
-	Memory      string
+	Uptime      time.Duration
+	Status      PortStatus
+	MemoryKB    int
 	GitBranch   string
 	StartTime   *time.Time
 	ProcessTree []ProcessNode
@@ -31,12 +40,11 @@ type ProcessInfo struct {
 	Command     string
 	Description string
 	CPU         float64
-	Memory      string
 	MemoryKB    int
 	CWD         string
 	ProjectName string
 	Framework   string
-	Uptime      string
+	Uptime      time.Duration
 }
 
 type KillTarget struct {
