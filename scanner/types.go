@@ -1,0 +1,60 @@
+package scanner
+
+import "time"
+
+type PortInfo struct {
+	Port        int
+	PID         int
+	ProcessName string
+	RawName     string
+	Command     string
+	CWD         string
+	ProjectName string
+	Framework   string
+	Uptime      string
+	Status      string
+	Memory      string
+	GitBranch   string
+	StartTime   *time.Time
+	ProcessTree []ProcessNode
+}
+
+type ProcessNode struct {
+	PID  int
+	PPID int
+	Name string
+}
+
+type ProcessInfo struct {
+	PID         int
+	ProcessName string
+	Command     string
+	Description string
+	CPU         float64
+	Memory      string
+	MemoryKB    int
+	CWD         string
+	ProjectName string
+	Framework   string
+	Uptime      string
+}
+
+type KillTarget struct {
+	PID  int
+	Via  string
+	Port int
+	Info *PortInfo
+}
+
+type dockerInfo struct {
+	Name  string
+	Image string
+}
+
+type psInfo struct {
+	PPID    int
+	Stat    string
+	RSSKB   int
+	Elapsed string
+	Command string
+}
