@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -14,17 +15,18 @@ import (
 )
 
 var (
-	listenPortRE    = regexp.MustCompile(`:(\d+)\b`)
-	batchPSLineRE   = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(.*)$`)
-	processLineRE   = regexp.MustCompile(`^\s*(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.*)$`)
-	dockerPortRE    = regexp.MustCompile(`:(\d+)->`)
-	startTimeLayout = "Mon Jan _2 15:04:05 2006"
+	ErrKillTargetAmbiguous = errors.New("kill target is ambiguous")
+	listenPortRE           = regexp.MustCompile(`:(\d+)\b`)
+	batchPSLineRE          = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(.*)$`)
+	processLineRE          = regexp.MustCompile(`^\s*(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.*)$`)
+	dockerPortRE           = regexp.MustCompile(`:(\d+)->`)
+	startTimeLayout        = "Mon Jan _2 15:04:05 2006"
 )
 
 func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 	output, err := run(ctx, 10*time.Second, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN")
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("list listening ports: %w", err)
 	}
 
 	lines := splitLines(output)
@@ -247,19 +249,47 @@ func ResolveKillTarget(ctx context.Context, n int) (*KillTarget, error) {
 	if n < 1 {
 		return nil, nil
 	}
-	if n <= 65535 {
-		info, err := GetPortDetails(ctx, n)
-		if err != nil {
-			return nil, err
-		}
-		if info != nil {
-			return &KillTarget{PID: info.PID, Via: "port", Port: n, Info: info}, nil
-		}
+
+	portTarget, err := ResolveKillPort(ctx, n)
+	if err != nil {
+		return nil, err
 	}
-	if PIDExists(n) {
-		return &KillTarget{PID: n, Via: "pid"}, nil
+	pidTarget := ResolveKillPID(n)
+
+	switch {
+	case portTarget != nil && pidTarget != nil && portTarget.PID != pidTarget.PID:
+		return nil, ErrKillTargetAmbiguous
+	case portTarget != nil:
+		return portTarget, nil
+	case pidTarget != nil:
+		return pidTarget, nil
+	default:
+		return nil, nil
 	}
-	return nil, nil
+}
+
+func ResolveKillPort(ctx context.Context, port int) (*KillTarget, error) {
+	if port < 1 || port > 65535 {
+		return nil, nil
+	}
+
+	info, err := GetPortDetails(ctx, port)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil {
+		return nil, nil
+	}
+
+	return &KillTarget{PID: info.PID, Via: "port", Port: port, Info: info}, nil
+}
+
+func ResolveKillPID(pid int) *KillTarget {
+	if pid < 1 || !PIDExists(pid) {
+		return nil
+	}
+
+	return &KillTarget{PID: pid, Via: "pid"}
 }
 
 func PIDExists(pid int) bool {

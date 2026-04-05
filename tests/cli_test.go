@@ -37,7 +37,15 @@ func TestMain(m *testing.M) {
 
 func runCLI(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
+	return runCLIWithEnv(t, nil, args...)
+}
+
+func runCLIWithEnv(t *testing.T, env []string, args ...string) (string, string, int) {
+	t.Helper()
 	cmd := exec.CommandContext(t.Context(), binaryPath, args...)
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

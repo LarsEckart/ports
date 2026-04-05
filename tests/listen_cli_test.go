@@ -53,3 +53,16 @@ func TestPSAllShowsTable(t *testing.T) {
 		t.Fatalf("expected process table headers, got:\n%s", stdout)
 	}
 }
+
+func TestPortsReportsPrimaryScanFailures(t *testing.T) {
+	stdout, stderr, exitCode := runCLIWithEnv(t, []string{"PATH=/usr/bin:/bin"}, "--all")
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit code when lsof is unavailable, stdout=%s stderr=%s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "list listening ports") {
+		t.Fatalf("expected scanner failure in stderr, got:\n%s", stderr)
+	}
+	if strings.Contains(stdout, "No active listening ports found") {
+		t.Fatalf("expected scanner failure instead of empty-state output, got:\n%s", stdout)
+	}
+}

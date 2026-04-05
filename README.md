@@ -12,7 +12,7 @@ It is very much inspired by [port-whisperer](https://github.com/LarsenCundric/po
 - `--all` mode for everything listening
 - inspect a single port with project path, git branch, memory, uptime, and process tree
 - `ps` view for developer processes
-- `kill` by port or PID
+- `kill` by port or PID, with `--port` / `--pid` when a number is ambiguous
 - `clean` orphaned/zombie dev processes
 - `watch` for port changes
 - framework detection for common JS, Python, Go, and Docker workloads
@@ -32,6 +32,8 @@ ports 3000
 ports ps
 ports ps --all
 ports kill 3000
+ports kill --pid 3000
+ports kill --port 3000
 ports clean --yes
 ports watch
 ```
