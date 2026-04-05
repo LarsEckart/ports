@@ -1,5 +1,5 @@
 # Repository guidance for coding agents
-- Stack: Go 1.25 CLI named `ports`; entrypoint is `main.go`, command registration lives in `cmd/`, OS inspection lives in `scanner/`, and terminal rendering lives in `render/`.
+- Stack: Go 1.26.1 CLI named `ports`; entrypoint is `main.go`, command registration lives in `cmd/`, OS inspection lives in `scanner/`, and terminal rendering lives in `render/`.
 - Architecture: keep `cmd/` thin; command files should parse flags/args, call `scanner`, and hand final presentation to `render`.
 - Runtime model: this tool is macOS-first and shells out to `lsof`, `ps`, `docker ps`, and `git`; there is no database, API server, or persisted app state.
 - Internal APIs: `scanner.PortInfo`, `scanner.ProcessInfo`, `scanner.KillTarget`, and `scanner.PortStatus` are the main cross-package data contracts.
