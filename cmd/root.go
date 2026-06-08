@@ -94,7 +94,7 @@ func rootAction(ctx context.Context, cmd *cli.Command) error {
 func filterDevPorts(ports []scanner.PortInfo) []scanner.PortInfo {
 	filtered := make([]scanner.PortInfo, 0, len(ports))
 	for _, port := range ports {
-		if scanner.IsDevProcess(port.ProcessName, port.Command) {
+		if scanner.IsDevPort(port) {
 			filtered = append(filtered, port)
 		}
 	}

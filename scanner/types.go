@@ -12,20 +12,21 @@ const (
 )
 
 type PortInfo struct {
-	Port        int
-	PID         int
-	ProcessName string
-	RawName     string
-	Command     string
-	CWD         string
-	ProjectName string
-	Framework   string
-	Uptime      time.Duration
-	Status      PortStatus
-	MemoryKB    int
-	GitBranch   string
-	StartTime   *time.Time
-	ProcessTree []ProcessNode
+	Port          int
+	PID           int
+	ProcessName   string
+	RawName       string
+	Command       string
+	ParentCommand string
+	CWD           string
+	ProjectName   string
+	Framework     string
+	Uptime        time.Duration
+	Status        PortStatus
+	MemoryKB      int
+	GitBranch     string
+	StartTime     *time.Time
+	ProcessTree   []ProcessNode
 }
 
 type ProcessNode struct {

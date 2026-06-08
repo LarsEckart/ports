@@ -78,6 +78,11 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		return nil, fmt.Errorf("load process metadata: %w", err)
 	}
 
+	parentPSMap, err := batchParentPS(ctx, psMap)
+	if err != nil {
+		return nil, fmt.Errorf("load parent process metadata: %w", err)
+	}
+
 	cwdMap, err := batchCWD(ctx, pids)
 	if err != nil {
 		return nil, fmt.Errorf("load process directories: %w", err)
@@ -100,6 +105,9 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		entry := &entries[i]
 		if ps, ok := psMap[entry.PID]; ok {
 			entry.Command = ps.Command
+			if parent, ok := parentPSMap[ps.PPID]; ok {
+				entry.ParentCommand = parent.Command
+			}
 			entry.MemoryKB = ps.RSSKB
 			entry.Uptime = elapsedDuration(ps.Elapsed)
 			entry.Framework = DetectFrameworkFromCommand(ps.Command, entry.ProcessName)
@@ -404,6 +412,23 @@ func CollapseDockerProcesses(processes []ProcessInfo) []ProcessInfo {
 	})
 
 	return nonDocker
+}
+
+func batchParentPS(ctx context.Context, processes map[int]psInfo) (map[int]psInfo, error) {
+	parentPIDs := make([]int, 0, len(processes))
+	seen := map[int]struct{}{}
+	for _, process := range processes {
+		if process.PPID <= 1 {
+			continue
+		}
+		if _, ok := seen[process.PPID]; ok {
+			continue
+		}
+		seen[process.PPID] = struct{}{}
+		parentPIDs = append(parentPIDs, process.PPID)
+	}
+
+	return batchPS(ctx, parentPIDs)
 }
 
 func batchPS(ctx context.Context, pids []int) (map[int]psInfo, error) {

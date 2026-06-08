@@ -10,6 +10,13 @@ import (
 
 var packageNameRE = regexp.MustCompile(`([a-zA-Z0-9._-]+\.(js|ts|mjs|cjs|py|rb|go))`)
 
+func IsDevPort(port PortInfo) bool {
+	if IsDevProcess(port.ProcessName, port.Command) {
+		return true
+	}
+	return isUVXCommand(port.ParentCommand)
+}
+
 func IsDevProcess(processName, command string) bool {
 	name := strings.ToLower(strings.TrimSpace(processName))
 	cmd := strings.ToLower(command)
@@ -131,6 +138,20 @@ func IsDevProcess(processName, command string) bool {
 		}
 	}
 
+	return false
+}
+
+func isUVXCommand(command string) bool {
+	fields := strings.Fields(strings.ToLower(command))
+	for i, field := range fields {
+		name := filepath.Base(field)
+		if name == "uvx" {
+			return true
+		}
+		if name == "uv" && i+2 < len(fields) && fields[i+1] == "tool" && fields[i+2] == "uvx" {
+			return true
+		}
+	}
 	return false
 }
 

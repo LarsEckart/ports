@@ -15,6 +15,61 @@ func TestIsDevProcess(t *testing.T) {
 	}
 }
 
+func TestIsDevPortDetectsUVXLaunches(t *testing.T) {
+	port := PortInfo{
+		ProcessName:   "agentsvie",
+		Command:       "/Users/lars/.cache/uv/archive-v0/example/lib/python3.13/site-packages/agentsview/bin/agentsview serve",
+		ParentCommand: "/Users/lars/.local/bin/uv tool uvx agentsview serve",
+	}
+
+	if !IsDevPort(port) {
+		t.Fatal("expected a uvx-launched listener to be treated as a dev port")
+	}
+}
+
+func TestIsDevPortDoesNotPromoteUnknownConsoleScripts(t *testing.T) {
+	port := PortInfo{
+		ProcessName: "agentsvie",
+		Command:     "/Users/lars/.cache/uv/archive-v0/example/lib/python3.13/site-packages/agentsview/bin/agentsview serve",
+	}
+
+	if IsDevPort(port) {
+		t.Fatal("expected an unknown console script without uvx parent context to stay filtered")
+	}
+}
+
+func TestIsUVXCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		{
+			name:    "uv tool uvx shim",
+			command: "/Users/lars/.local/bin/uv tool uvx agentsview serve",
+			want:    true,
+		},
+		{
+			name:    "direct uvx executable",
+			command: "/Users/lars/.local/bin/uvx agentsview serve",
+			want:    true,
+		},
+		{
+			name:    "uv command that is not uvx",
+			command: "/Users/lars/.local/bin/uv run python app.py",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isUVXCommand(tt.command); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestDetectFrameworkFromCommand(t *testing.T) {
 	if got := DetectFrameworkFromCommand("node ./node_modules/.bin/next dev", "node"); got != "Next.js" {
 		t.Fatalf("expected Next.js, got %q", got)
