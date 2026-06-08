@@ -16,7 +16,6 @@ import (
 
 var (
 	ErrKillTargetAmbiguous = errors.New("kill target is ambiguous")
-	listenPortRE           = regexp.MustCompile(`:(\d+)\b`)
 	batchPSLineRE          = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(.*)$`)
 	processLineRE          = regexp.MustCompile(`^\s*(\d+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.*)$`)
 	dockerPortRE           = regexp.MustCompile(`:(\d+)->`)
@@ -51,13 +50,8 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		}
 
 		nameField := strings.Join(fields[8:], " ")
-		match := listenPortRE.FindStringSubmatch(nameField)
-		if len(match) != 2 {
-			continue
-		}
-
-		port, err := strconv.Atoi(match[1])
-		if err != nil {
+		port, ok := parseListenPort(nameField)
+		if !ok {
 			continue
 		}
 		if _, ok := seenPorts[port]; ok {
@@ -146,6 +140,20 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Port < entries[j].Port })
 	return entries, nil
+}
+
+func parseListenPort(nameField string) (int, bool) {
+	endpoint := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(nameField), "(LISTEN)"))
+	colon := strings.LastIndexByte(endpoint, ':')
+	if colon == -1 || colon == len(endpoint)-1 {
+		return 0, false
+	}
+
+	port, err := strconv.Atoi(endpoint[colon+1:])
+	if err != nil || port <= 0 || port > 65535 {
+		return 0, false
+	}
+	return port, true
 }
 
 func GetPortDetails(ctx context.Context, targetPort int) (*PortInfo, error) {
@@ -354,6 +362,9 @@ func WatchPorts(ctx context.Context, interval time.Duration, callback func(event
 			return nil
 		case <-ticker.C:
 			if err := emit(); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
 				return err
 			}
 		}

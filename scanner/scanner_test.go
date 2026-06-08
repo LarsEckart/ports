@@ -41,6 +41,62 @@ node    42 lars  cwd    DIR   1,15      896    2 /tmp/project with spaces
 	}
 }
 
+func TestParseListenPort(t *testing.T) {
+	tests := []struct {
+		name      string
+		nameField string
+		want      int
+		wantOK    bool
+	}{
+		{
+			name:      "wildcard IPv4",
+			nameField: "TCP *:60543 (LISTEN)",
+			want:      60543,
+			wantOK:    true,
+		},
+		{
+			name:      "loopback IPv4",
+			nameField: "TCP 127.0.0.1:8080 (LISTEN)",
+			want:      8080,
+			wantOK:    true,
+		},
+		{
+			name:      "loopback IPv6",
+			nameField: "TCP [::1]:42050 (LISTEN)",
+			want:      42050,
+			wantOK:    true,
+		},
+		{
+			name:      "scoped IPv6",
+			nameField: "TCP [fe80::1%lo0]:12345 (LISTEN)",
+			want:      12345,
+			wantOK:    true,
+		},
+		{
+			name:      "missing port",
+			nameField: "TCP [::1] (LISTEN)",
+			wantOK:    false,
+		},
+		{
+			name:      "non-numeric port",
+			nameField: "TCP 127.0.0.1:http (LISTEN)",
+			wantOK:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := parseListenPort(tt.nameField)
+			if ok != tt.wantOK {
+				t.Fatalf("expected ok=%v, got %v", tt.wantOK, ok)
+			}
+			if got != tt.want {
+				t.Fatalf("expected port %d, got %d", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestWatchPortsSkipsInitialListeners(t *testing.T) {
 	initialListener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
