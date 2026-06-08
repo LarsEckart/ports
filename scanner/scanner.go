@@ -107,6 +107,9 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 			entry.Command = ps.Command
 			if parent, ok := parentPSMap[ps.PPID]; ok {
 				entry.ParentCommand = parent.Command
+				if label, ok := uvxProjectLabel(parent.Command); ok {
+					entry.ProjectName = label
+				}
 			}
 			entry.MemoryKB = ps.RSSKB
 			entry.Uptime = elapsedDuration(ps.Elapsed)
@@ -128,11 +131,13 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 			entry.ProcessName = "docker"
 		}
 
-		if cwd, ok := cwdMap[entry.PID]; ok && entry.ProjectName == "" {
+		if cwd, ok := cwdMap[entry.PID]; ok {
 			projectRoot := FindProjectRoot(cwd)
 			if projectRoot != "/" {
 				entry.CWD = projectRoot
-				entry.ProjectName = filepath.Base(projectRoot)
+				if entry.ProjectName == "" {
+					entry.ProjectName = filepath.Base(projectRoot)
+				}
 				if entry.Framework == "" {
 					entry.Framework = DetectFramework(projectRoot)
 				}

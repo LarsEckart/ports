@@ -142,17 +142,122 @@ func IsDevProcess(processName, command string) bool {
 }
 
 func isUVXCommand(command string) bool {
-	fields := strings.Fields(strings.ToLower(command))
+	_, ok := uvxPackageName(command)
+	return ok
+}
+
+func uvxProjectLabel(command string) (string, bool) {
+	packageName, ok := uvxPackageName(command)
+	if !ok {
+		return "", false
+	}
+	return "uvx " + packageName, true
+}
+
+func uvxPackageName(command string) (string, bool) {
+	fields := strings.Fields(command)
 	for i, field := range fields {
-		name := filepath.Base(field)
+		name := filepath.Base(strings.ToLower(field))
 		if name == "uvx" {
-			return true
+			return uvxPackageNameFromArgs(fields[i+1:])
 		}
-		if name == "uv" && i+2 < len(fields) && fields[i+1] == "tool" && fields[i+2] == "uvx" {
-			return true
+		if name == "uv" && i+2 < len(fields) && strings.ToLower(fields[i+1]) == "tool" && strings.ToLower(fields[i+2]) == "uvx" {
+			return uvxPackageNameFromArgs(fields[i+3:])
 		}
 	}
-	return false
+	return "", false
+}
+
+func uvxPackageNameFromArgs(args []string) (string, bool) {
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		if arg == "" {
+			continue
+		}
+		if arg == "--" {
+			if i+1 >= len(args) {
+				return "", false
+			}
+			return cleanUVXPackageName(args[i+1])
+		}
+		if value, ok := strings.CutPrefix(arg, "--from="); ok {
+			return cleanUVXPackageName(value)
+		}
+		if arg == "--from" {
+			if i+1 >= len(args) {
+				return "", false
+			}
+			return cleanUVXPackageName(args[i+1])
+		}
+		if strings.HasPrefix(arg, "-") {
+			if uvxOptionTakesValue(arg) {
+				i++
+			}
+			continue
+		}
+		return cleanUVXPackageName(arg)
+	}
+	return "", false
+}
+
+func uvxOptionTakesValue(option string) bool {
+	option, _, _ = strings.Cut(option, "=")
+	valueOptions := map[string]struct{}{
+		"--active-groups":           {},
+		"--config-setting":          {},
+		"--config-settings-package": {},
+		"--config-file":             {},
+		"--constraint":              {},
+		"--default-index":           {},
+		"--dependency-mode":         {},
+		"--directory":               {},
+		"--env-file":                {},
+		"--exclude-newer":           {},
+		"--exclude-newer-package":   {},
+		"--extra-index-url":         {},
+		"--find-links":              {},
+		"--fork-strategy":           {},
+		"--group":                   {},
+		"--index":                   {},
+		"--index-strategy":          {},
+		"--index-url":               {},
+		"--keyring-provider":        {},
+		"--link-mode":               {},
+		"--override":                {},
+		"--prerelease":              {},
+		"--project":                 {},
+		"--python":                  {},
+		"--python-platform":         {},
+		"--python-preference":       {},
+		"--refresh-package":         {},
+		"--reinstall-package":       {},
+		"--resolution":              {},
+		"--upgrade-package":         {},
+		"--with":                    {},
+		"--with-editable":           {},
+		"--with-requirements":       {},
+	}
+	_, ok := valueOptions[option]
+	return ok
+}
+
+func cleanUVXPackageName(value string) (string, bool) {
+	value = strings.Trim(strings.TrimSpace(value), "'\"")
+	if value == "" {
+		return "", false
+	}
+	if strings.Contains(value, "/") {
+		value = filepath.Base(value)
+	}
+
+	cutAt := len(value)
+	for _, separator := range []string{"[", "==", ">=", "<=", "!=", "~=", ">", "<", ";"} {
+		if index := strings.Index(value, separator); index >= 0 && index < cutAt {
+			cutAt = index
+		}
+	}
+	value = value[:cutAt]
+	return value, value != ""
 }
 
 func DetectFrameworkFromImage(image string) string {

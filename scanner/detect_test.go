@@ -70,6 +70,73 @@ func TestIsUVXCommand(t *testing.T) {
 	}
 }
 
+func TestUVXProjectLabel(t *testing.T) {
+	got, ok := uvxProjectLabel("/Users/lars/.local/bin/uv tool uvx agentsview serve")
+	if !ok {
+		t.Fatal("expected uvx project label")
+	}
+	if got != "uvx agentsview" {
+		t.Fatalf("expected project label %q, got %q", "uvx agentsview", got)
+	}
+}
+
+func TestUVXPackageName(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    string
+		wantOK  bool
+	}{
+		{
+			name:    "uv tool uvx shim",
+			command: "/Users/lars/.local/bin/uv tool uvx agentsview serve",
+			want:    "agentsview",
+			wantOK:  true,
+		},
+		{
+			name:    "direct uvx executable",
+			command: "/Users/lars/.local/bin/uvx agentsview serve",
+			want:    "agentsview",
+			wantOK:  true,
+		},
+		{
+			name:    "skips uvx options with values",
+			command: "uvx --python 3.13 --isolated agentsview serve",
+			want:    "agentsview",
+			wantOK:  true,
+		},
+		{
+			name:    "prefers package from --from",
+			command: "uvx --from agentsview agentsview serve",
+			want:    "agentsview",
+			wantOK:  true,
+		},
+		{
+			name:    "cleans version constraints",
+			command: "uvx 'agentsview>=1.2' serve",
+			want:    "agentsview",
+			wantOK:  true,
+		},
+		{
+			name:    "uv command that is not uvx",
+			command: "/Users/lars/.local/bin/uv run python app.py",
+			wantOK:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := uvxPackageName(tt.command)
+			if ok != tt.wantOK {
+				t.Fatalf("expected ok=%v, got %v", tt.wantOK, ok)
+			}
+			if got != tt.want {
+				t.Fatalf("expected package %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestDetectFrameworkFromCommand(t *testing.T) {
 	if got := DetectFrameworkFromCommand("node ./node_modules/.bin/next dev", "node"); got != "Next.js" {
 		t.Fatalf("expected Next.js, got %q", got)
