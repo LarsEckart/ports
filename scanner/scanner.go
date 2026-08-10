@@ -136,7 +136,7 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 			if projectRoot != "/" {
 				entry.CWD = projectRoot
 				if entry.ProjectName == "" {
-					entry.ProjectName = filepath.Base(projectRoot)
+					entry.ProjectName = projectLabel(projectRoot)
 				}
 				if entry.Framework == "" {
 					entry.Framework = DetectFramework(projectRoot)
@@ -243,7 +243,7 @@ func GetAllProcesses(ctx context.Context) ([]ProcessInfo, error) {
 			continue
 		}
 		entry.CWD = projectRoot
-		entry.ProjectName = filepath.Base(projectRoot)
+		entry.ProjectName = projectLabel(projectRoot)
 		if entry.Framework == "" {
 			entry.Framework = DetectFramework(projectRoot)
 		}

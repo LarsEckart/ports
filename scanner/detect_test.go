@@ -163,6 +163,22 @@ func TestDetectFramework(t *testing.T) {
 	}
 }
 
+func TestProjectLabel(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/Users/lars/GitHub/ports/frontend", want: "ports/frontend"},
+		{path: "/frontend", want: "frontend"},
+	}
+
+	for _, tt := range tests {
+		if got := projectLabel(tt.path); got != tt.want {
+			t.Errorf("projectLabel(%q) = %q, want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
 func TestFindProjectRoot(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "a", "b", "c")

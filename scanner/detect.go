@@ -318,6 +318,18 @@ func FindProjectRoot(dir string) string {
 	return dir
 }
 
+// projectLabel names a project by its parent and own directory, such as "ports/frontend".
+// The parent makes common names like "frontend" distinct in the port list.
+func projectLabel(projectRoot string) string {
+	projectRoot = filepath.Clean(projectRoot)
+	name := filepath.Base(projectRoot)
+	parent := filepath.Base(filepath.Dir(projectRoot))
+	if projectRoot == string(filepath.Separator) || parent == string(filepath.Separator) || parent == "." {
+		return name
+	}
+	return filepath.Join(parent, name)
+}
+
 func DetectFramework(projectRoot string) string {
 	pkgPath := filepath.Join(projectRoot, "package.json")
 	if data, err := os.ReadFile(pkgPath); err == nil {
