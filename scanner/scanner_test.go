@@ -41,6 +41,28 @@ node    42 lars  cwd    DIR   1,15      896    2 /tmp/project with spaces
 	}
 }
 
+func TestProcessNameFromCommand(t *testing.T) {
+	tests := []struct {
+		command  string
+		fallback string
+		want     string
+	}{
+		{
+			command:  "/Applications/Docker.app/Contents/MacOS/com.docker.backend services",
+			fallback: "com.docke",
+			want:     "com.docker.backend",
+		},
+		{command: "node server.js", fallback: "node", want: "node"},
+		{command: "", fallback: "shortened", want: "shortened"},
+	}
+
+	for _, tt := range tests {
+		if got := processNameFromCommand(tt.command, tt.fallback); got != tt.want {
+			t.Errorf("processNameFromCommand(%q, %q) = %q, want %q", tt.command, tt.fallback, got, tt.want)
+		}
+	}
+}
+
 func TestParseListenPort(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -105,6 +105,7 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		entry := &entries[i]
 		if ps, ok := psMap[entry.PID]; ok {
 			entry.Command = ps.Command
+			entry.ProcessName = processNameFromCommand(ps.Command, entry.ProcessName)
 			if parent, ok := parentPSMap[ps.PPID]; ok {
 				entry.ParentCommand = parent.Command
 				if label, ok := uvxProjectLabel(parent.Command); ok {
@@ -153,6 +154,15 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Port < entries[j].Port })
 	return entries, nil
+}
+
+// processNameFromCommand prefers ps because lsof shortens COMMAND names on macOS.
+func processNameFromCommand(command, fallback string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return fallback
+	}
+	return filepath.Base(fields[0])
 }
 
 func parseListenPort(nameField string) (int, bool) {

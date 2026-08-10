@@ -10,6 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const processNameMaxWidth = 22
+
 var (
 	borderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
@@ -90,7 +92,7 @@ func DisplayPortTable(w io.Writer, ports []scanner.PortInfo, filtered bool) {
 	for _, port := range ports {
 		rows = append(rows, []string{
 			whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", port.Port)),
-			whiteStyle.Render(orDash(truncate(port.ProcessName, 15))),
+			whiteStyle.Render(orDash(truncate(port.ProcessName, processNameMaxWidth))),
 			mutedStyle.Render(fmt.Sprintf("%d", port.PID)),
 			styledProject(port.ProjectName),
 			formatFramework(port.Framework),
@@ -124,7 +126,7 @@ func DisplayProcessTable(w io.Writer, processes []scanner.ProcessInfo, filtered 
 	for _, process := range processes {
 		rows = append(rows, []string{
 			mutedStyle.Render(fmt.Sprintf("%d", process.PID)),
-			whiteStyle.Bold(true).Render(truncate(process.ProcessName, 15)),
+			whiteStyle.Bold(true).Render(truncate(process.ProcessName, processNameMaxWidth)),
 			formatCPU(process.CPU),
 			styledMemory(process.MemoryKB),
 			styledProject(process.ProjectName),
