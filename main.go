@@ -17,8 +17,7 @@ type exitCoder interface {
 func main() {
 	app := cmd.NewApp()
 	if err := app.Run(context.Background(), os.Args); err != nil {
-		var ec exitCoder
-		if errors.As(err, &ec) {
+		if ec, ok := errors.AsType[exitCoder](err); ok {
 			if msg := err.Error(); msg != "" {
 				fmt.Fprintln(os.Stderr, msg)
 			}

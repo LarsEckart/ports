@@ -1,6 +1,6 @@
 module github.com/LarsEckart/ports
 
-go 1.26.1
+go 1.27.0
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0

@@ -167,12 +167,12 @@ func processNameFromCommand(command, fallback string) string {
 
 func parseListenPort(nameField string) (int, bool) {
 	endpoint := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(nameField), "(LISTEN)"))
-	colon := strings.LastIndexByte(endpoint, ':')
-	if colon == -1 || colon == len(endpoint)-1 {
+	_, portText, found := strings.CutLast(endpoint, ":")
+	if !found || portText == "" {
 		return 0, false
 	}
 
-	port, err := strconv.Atoi(endpoint[colon+1:])
+	port, err := strconv.Atoi(portText)
 	if err != nil || port <= 0 || port > 65535 {
 		return 0, false
 	}

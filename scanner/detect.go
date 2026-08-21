@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -339,12 +340,8 @@ func DetectFramework(projectRoot string) string {
 		}
 		if err := json.Unmarshal(data, &pkg); err == nil {
 			deps := map[string]string{}
-			for k, v := range pkg.Dependencies {
-				deps[k] = v
-			}
-			for k, v := range pkg.DevDependencies {
-				deps[k] = v
-			}
+			maps.Copy(deps, pkg.Dependencies)
+			maps.Copy(deps, pkg.DevDependencies)
 
 			switch {
 			case hasDep(deps, "next"):
