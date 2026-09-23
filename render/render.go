@@ -322,40 +322,48 @@ func renderHeader(w io.Writer) {
 	fprintln(w)
 }
 
-func renderTable(headers []string, rows [][]string) string {
+type borderParts struct {
+	left, mid, right string
+}
+
+func tableWidths(headers []string, rows [][]string) []int {
 	widths := make([]int, len(headers))
 	for i, header := range headers {
-		widths[i] = max(widths[i], lipgloss.Width(header))
+		widths[i] = lipgloss.Width(header)
 	}
 	for _, row := range rows {
 		for i, cell := range row {
 			widths[i] = max(widths[i], lipgloss.Width(cell))
 		}
 	}
+	return widths
+}
 
+func renderTable(headers []string, rows [][]string) string {
+	widths := tableWidths(headers, rows)
 	var b strings.Builder
-	writeBorder(&b, widths, "┌", "┬", "┐")
+	writeBorder(&b, widths, borderParts{"┌", "┬", "┐"})
 	writeRow(&b, widths, styleHeaders(headers))
-	writeBorder(&b, widths, "├", "┼", "┤")
+	writeBorder(&b, widths, borderParts{"├", "┼", "┤"})
 	for i, row := range rows {
 		writeRow(&b, widths, row)
 		if i < len(rows)-1 {
-			writeBorder(&b, widths, "├", "┼", "┤")
+			writeBorder(&b, widths, borderParts{"├", "┼", "┤"})
 		}
 	}
-	writeBorder(&b, widths, "└", "┴", "┘")
+	writeBorder(&b, widths, borderParts{"└", "┴", "┘"})
 	return b.String()
 }
 
-func writeBorder(b *strings.Builder, widths []int, left, mid, right string) {
-	b.WriteString(borderStyle.Render(left))
+func writeBorder(b *strings.Builder, widths []int, parts borderParts) {
+	b.WriteString(borderStyle.Render(parts.left))
 	for i, width := range widths {
 		b.WriteString(borderStyle.Render(strings.Repeat("─", width+2)))
 		if i < len(widths)-1 {
-			b.WriteString(borderStyle.Render(mid))
+			b.WriteString(borderStyle.Render(parts.mid))
 		}
 	}
-	b.WriteString(borderStyle.Render(right))
+	b.WriteString(borderStyle.Render(parts.right))
 	b.WriteByte('\n')
 }
 
