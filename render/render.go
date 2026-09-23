@@ -201,6 +201,50 @@ func DisplayPortDetail(w io.Writer, info *scanner.PortInfo) {
 	fprintln(w)
 }
 
+func DisplayInvalidKillArgument(w io.Writer, arg string) {
+	fprintln(w, redStyle.Render(fmt.Sprintf("  ✕ %q is not a valid port or PID", arg)))
+}
+
+func DisplayAmbiguousKillTarget(w io.Writer, n int) {
+	fprintln(w, redStyle.Render(fmt.Sprintf("  ✕ %d matches both a listening port and a PID; use --port or --pid", n)))
+}
+
+func DisplayMissingKillTarget(w io.Writer, n int, byPID, byPort bool) {
+	var message string
+	switch {
+	case byPort:
+		message = fmt.Sprintf("  ✕ No listener on :%d", n)
+	case byPID || n > 65535:
+		message = fmt.Sprintf("  ✕ No process with PID %d", n)
+	default:
+		message = fmt.Sprintf("  ✕ No listener on :%d and no process with PID %d", n, n)
+	}
+	fprintln(w, redStyle.Render(message))
+}
+
+func killLabel(target *scanner.KillTarget) string {
+	if target.Via == "port" && target.Info != nil {
+		return fmt.Sprintf(":%d — %s (PID %d)", target.Port, target.Info.ProcessName, target.PID)
+	}
+	return fmt.Sprintf("PID %d", target.PID)
+}
+
+func DisplayKilling(w io.Writer, target *scanner.KillTarget) {
+	fprintln(w, whiteStyle.Render("  Killing "+killLabel(target)))
+}
+
+func DisplayKillResult(w io.Writer, target *scanner.KillTarget, force, success bool) {
+	signal := "SIGTERM"
+	if force {
+		signal = "SIGKILL"
+	}
+	if success {
+		fprintln(w, greenStyle.Render(fmt.Sprintf("  ✓ Sent %s to %s", signal, killLabel(target))))
+		return
+	}
+	fprintln(w, redStyle.Render(fmt.Sprintf("  ✕ Failed to send %s to %s", signal, killLabel(target))))
+}
+
 func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, failed []int) {
 	renderHeader(w)
 	if len(orphaned) == 0 {

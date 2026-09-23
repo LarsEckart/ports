@@ -4,11 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 
+	"github.com/LarsEckart/ports/render"
 	"github.com/LarsEckart/ports/scanner"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
+)
+
+type killMode uint8
+
+const (
+	killAuto killMode = iota
+	killByPID
+	killByPort
 )
 
 func KillCmd() *cli.Command {
@@ -35,88 +44,82 @@ func KillCmd() *cli.Command {
 				Usage: "Interpret every argument as a port",
 			},
 		},
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			args := cmd.Args().Slice()
-			if len(args) == 0 {
-				return usageErrorWithHelp(ctx, cmd, "usage: ports kill [-f|--force] [--pid|--port] <port|pid> [port|pid...]")
-			}
-
-			if cmd.Bool("pid") && cmd.Bool("port") {
-				return usageErrorWithHelp(ctx, cmd, "choose only one of --pid or --port")
-			}
-
-			force := cmd.Bool("force")
-			byPID := cmd.Bool("pid")
-			byPort := cmd.Bool("port")
-			var anyFailed bool
-			signal := "SIGTERM"
-			if force {
-				signal = "SIGKILL"
-			}
-
-			white := lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
-			green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-			red := lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-
-			fmt.Println()
-			for _, arg := range args {
-				n, err := strconv.Atoi(arg)
-				if err != nil {
-					fmt.Println(red.Render("  ✕ " + fmt.Sprintf("%q is not a valid port or PID", arg)))
-					anyFailed = true
-					continue
-				}
-
-				var resolved *scanner.KillTarget
-				switch {
-				case byPID:
-					resolved = scanner.ResolveKillPID(n)
-				case byPort:
-					resolved, err = scanner.ResolveKillPort(ctx, n)
-				default:
-					resolved, err = scanner.ResolveKillTarget(ctx, n)
-				}
-				if err != nil {
-					if errors.Is(err, scanner.ErrKillTargetAmbiguous) {
-						fmt.Println(red.Render(fmt.Sprintf("  ✕ %d matches both a listening port and a PID; use --port or --pid", n)))
-						anyFailed = true
-						continue
-					}
-					return err
-				}
-				if resolved == nil {
-					switch {
-					case byPort:
-						fmt.Println(red.Render(fmt.Sprintf("  ✕ No listener on :%d", n)))
-					case byPID || n > 65535:
-						fmt.Println(red.Render(fmt.Sprintf("  ✕ No process with PID %d", n)))
-					default:
-						fmt.Println(red.Render(fmt.Sprintf("  ✕ No listener on :%d and no process with PID %d", n, n)))
-					}
-					anyFailed = true
-					continue
-				}
-
-				label := fmt.Sprintf("PID %d", resolved.PID)
-				if resolved.Via == "port" && resolved.Info != nil {
-					label = fmt.Sprintf(":%d — %s (PID %d)", resolved.Port, resolved.Info.ProcessName, resolved.PID)
-				}
-
-				fmt.Println(white.Render("  Killing " + label))
-				if err := scanner.KillProcess(resolved.PID, force); err != nil {
-					fmt.Println(red.Render(fmt.Sprintf("  ✕ Failed to send %s to %s", signal, label)))
-					anyFailed = true
-					continue
-				}
-
-				fmt.Println(green.Render(fmt.Sprintf("  ✓ Sent %s to %s", signal, label)))
-			}
-			fmt.Println()
-
-			if anyFailed {
-				return exitWith("", exitCodeFailure)
-			}
-			return nil
-		},
+		Action: killAction,
 	}
+}
+
+func killAction(ctx context.Context, cmd *cli.Command) error {
+	mode, err := killSelection(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	args := cmd.Args().Slice()
+	force := cmd.Bool("force")
+	var anyFailed bool
+	fmt.Println()
+	for _, arg := range args {
+		failed, err := killArgument(ctx, arg, mode, force)
+		if err != nil {
+			return err
+		}
+		anyFailed = anyFailed || failed
+	}
+	fmt.Println()
+	if anyFailed {
+		return exitWith("", exitCodeFailure)
+	}
+	return nil
+}
+
+func killSelection(ctx context.Context, cmd *cli.Command) (killMode, error) {
+	if cmd.Args().Len() == 0 {
+		return killAuto, usageErrorWithHelp(ctx, cmd, "usage: ports kill [-f|--force] [--pid|--port] <port|pid> [port|pid...]")
+	}
+	if cmd.Bool("pid") && cmd.Bool("port") {
+		return killAuto, usageErrorWithHelp(ctx, cmd, "choose only one of --pid or --port")
+	}
+	if cmd.Bool("pid") {
+		return killByPID, nil
+	}
+	if cmd.Bool("port") {
+		return killByPort, nil
+	}
+	return killAuto, nil
+}
+
+func killArgument(ctx context.Context, arg string, mode killMode, force bool) (bool, error) {
+	n, err := strconv.Atoi(arg)
+	if err != nil {
+		render.DisplayInvalidKillArgument(os.Stdout, arg)
+		return true, nil
+	}
+
+	var target *scanner.KillTarget
+	switch mode {
+	case killByPID:
+		target = scanner.ResolveKillPID(n)
+	case killByPort:
+		target, err = scanner.ResolveKillPort(ctx, n)
+	default:
+		target, err = scanner.ResolveKillTarget(ctx, n)
+	}
+	if errors.Is(err, scanner.ErrKillTargetAmbiguous) {
+		render.DisplayAmbiguousKillTarget(os.Stdout, n)
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if target == nil {
+		render.DisplayMissingKillTarget(os.Stdout, n, mode == killByPID, mode == killByPort)
+		return true, nil
+	}
+
+	render.DisplayKilling(os.Stdout, target)
+	if err := scanner.KillProcess(target.PID, force); err != nil {
+		render.DisplayKillResult(os.Stdout, target, force, false)
+		return true, nil
+	}
+	render.DisplayKillResult(os.Stdout, target, force, true)
+	return false, nil
 }
