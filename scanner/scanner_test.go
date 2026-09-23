@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -148,21 +149,17 @@ func TestWatchPortsSkipsInitialListeners(t *testing.T) {
 	defer func() { _ = initialListener.Close() }()
 
 	initialPort := initialListener.Addr().(*net.TCPAddr).Port
-	var newPort int
+	var newPort atomic.Int64
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	type event struct {
-		kind string
-		port int
-	}
-	events := make(chan event, 4)
+	events := make(chan watchEvent, 4)
 	errCh := make(chan error, 1)
 
 	go func() {
 		errCh <- WatchPorts(ctx, 100*time.Millisecond, func(eventType string, info PortInfo) {
-			if info.Port == initialPort || info.Port == newPort {
-				events <- event{kind: eventType, port: info.Port}
+			if info.Port == initialPort || info.Port == int(newPort.Load()) {
+				events <- watchEvent{kind: eventType, port: info.Port}
 			}
 		})
 	}()
@@ -179,23 +176,33 @@ func TestWatchPortsSkipsInitialListeners(t *testing.T) {
 	}
 	defer func() { _ = newListener.Close() }()
 
-	newPort = newListener.Addr().(*net.TCPAddr).Port
+	port := newListener.Addr().(*net.TCPAddr).Port
+	newPort.Store(int64(port))
+	awaitNewPortEvent(t, events, port)
+	cancel()
+	if err := <-errCh; err != nil {
+		t.Fatalf("watch returned error: %v", err)
+	}
+}
 
+type watchEvent struct {
+	kind string
+	port int
+}
+
+func awaitNewPortEvent(t *testing.T, events <-chan watchEvent, port int) {
+	t.Helper()
 	deadline := time.After(3 * time.Second)
 	for {
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for new listener on port %d", newPort)
+			t.Fatalf("timed out waiting for new listener on port %d", port)
 		case event := <-events:
-			if event.port != newPort {
+			if event.port != port {
 				continue
 			}
 			if event.kind != "new" {
-				t.Fatalf("expected new event for port %d, got %+v", newPort, event)
-			}
-			cancel()
-			if err := <-errCh; err != nil {
-				t.Fatalf("watch returned error: %v", err)
+				t.Fatalf("expected new event for port %d, got %+v", port, event)
 			}
 			return
 		}
