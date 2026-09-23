@@ -62,33 +62,38 @@ func rootAction(ctx context.Context, cmd *cli.Command) error {
 	showAll := cmd.Bool("all")
 
 	if len(args) == 0 {
-		ports, err := scanner.GetListeningPorts(ctx, false)
-		if err != nil {
-			return err
-		}
-		if !showAll {
-			ports = filterDevPorts(ports)
-		}
-		render.DisplayPortTable(os.Stdout, ports, !showAll)
-		return nil
+		return showPorts(ctx, showAll)
 	}
-
 	if len(args) == 1 {
-		port, err := strconv.Atoi(args[0])
-		if err == nil {
-			info, err := scanner.GetPortDetails(ctx, port)
-			if err != nil {
-				return err
-			}
-			render.DisplayPortDetail(os.Stdout, info)
-			if info == nil {
-				return exitWith("", exitCodeFailure)
-			}
-			return nil
+		if port, err := strconv.Atoi(args[0]); err == nil {
+			return showPort(ctx, port)
 		}
 	}
-
 	return usageErrorWithHelp(ctx, cmd, fmt.Sprintf("unknown command or argument: %s", args[0]))
+}
+
+func showPorts(ctx context.Context, showAll bool) error {
+	ports, err := scanner.GetListeningPorts(ctx, false)
+	if err != nil {
+		return err
+	}
+	if !showAll {
+		ports = filterDevPorts(ports)
+	}
+	render.DisplayPortTable(os.Stdout, ports, !showAll)
+	return nil
+}
+
+func showPort(ctx context.Context, port int) error {
+	info, err := scanner.GetPortDetails(ctx, port)
+	if err != nil {
+		return err
+	}
+	render.DisplayPortDetail(os.Stdout, info)
+	if info == nil {
+		return exitWith("", exitCodeFailure)
+	}
+	return nil
 }
 
 func filterDevPorts(ports []scanner.PortInfo) []scanner.PortInfo {
