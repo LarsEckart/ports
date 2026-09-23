@@ -245,6 +245,19 @@ func DisplayKillResult(w io.Writer, target *scanner.KillTarget, force, success b
 	fprintln(w, redStyle.Render(fmt.Sprintf("  ✕ Failed to send %s to %s", signal, killLabel(target))))
 }
 
+func DisplayCleanConfirmation(w io.Writer, orphaned []scanner.PortInfo) {
+	fprintln(w)
+	fprintf(w, "Found %d orphaned/zombie process(es):\n", len(orphaned))
+	for _, port := range orphaned {
+		fprintf(w, "  - :%d — %s (PID %d)\n", port.Port, port.ProcessName, port.PID)
+	}
+	fprintln(w)
+}
+
+func DisplayCleanAborted(w io.Writer) {
+	fprintln(w, "Aborted.")
+}
+
 func DisplayCleanResults(w io.Writer, orphaned []scanner.PortInfo, killed, failed []int) {
 	renderHeader(w)
 	if len(orphaned) == 0 {
