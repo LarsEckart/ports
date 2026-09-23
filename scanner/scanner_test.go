@@ -4,9 +4,30 @@ import (
 	"context"
 	"net"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
+
+func TestParseListeningPortsDeduplicatesPortsAndPIDs(t *testing.T) {
+	output := `COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+node 42 lars 10u IPv4 0x1 0t0 TCP *:8080 (LISTEN)
+node 42 lars 11u IPv6 0x2 0t0 TCP [::1]:8080 (LISTEN)
+node 42 lars 12u IPv4 0x3 0t0 TCP *:3000 (LISTEN)
+python 53 lars 13u IPv4 0x4 0t0 TCP *:9000 (LISTEN)
+`
+	ports, pids := parseListeningPorts(output)
+	portNumbers := make([]int, 0, len(ports))
+	for _, port := range ports {
+		portNumbers = append(portNumbers, port.Port)
+	}
+	if !slices.Equal(portNumbers, []int{8080, 3000, 9000}) {
+		t.Fatalf("unexpected ports: %v", portNumbers)
+	}
+	if !slices.Equal(pids, []int{42, 53}) {
+		t.Fatalf("unexpected pids: %v", pids)
+	}
+}
 
 func TestParseCWDOutput(t *testing.T) {
 	output := `COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF    NODE NAME

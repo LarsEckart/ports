@@ -28,6 +28,55 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		return nil, fmt.Errorf("list listening ports: %w", err)
 	}
 
+	entries, pids := parseListeningPorts(output)
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	metadata, err := loadPortMetadata(ctx, entries, pids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range entries {
+		entry := &entries[i]
+		enrichPort(entry, metadata)
+		if err := maybeEnrichPortDetail(ctx, entry, detailed); err != nil {
+			return nil, err
+		}
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Port < entries[j].Port })
+	return entries, nil
+}
+
+func loadPortMetadata(ctx context.Context, entries []PortInfo, pids []int) (portMetadata, error) {
+	psMap, err := batchPS(ctx, pids)
+	if err != nil {
+		return portMetadata{}, fmt.Errorf("load process metadata: %w", err)
+	}
+	parentPSMap, err := batchParentPS(ctx, psMap)
+	if err != nil {
+		return portMetadata{}, fmt.Errorf("load parent process metadata: %w", err)
+	}
+	cwdMap, err := batchCWD(ctx, pids)
+	if err != nil {
+		return portMetadata{}, fmt.Errorf("load process directories: %w", err)
+	}
+	dockerMap := map[int]dockerInfo{}
+	if containsDockerProcess(entries) {
+		dockerMap, _ = batchDockerInfo(ctx)
+	}
+	return portMetadata{psMap, parentPSMap, cwdMap, dockerMap}, nil
+}
+
+func maybeEnrichPortDetail(ctx context.Context, entry *PortInfo, detailed bool) error {
+	if !detailed {
+		return nil
+	}
+	return enrichPortDetail(ctx, entry)
+}
+
+func parseListeningPorts(output string) ([]PortInfo, []int) {
 	lines := splitLines(output)
 	if len(lines) <= 1 {
 		return nil, nil
@@ -37,7 +86,6 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 	seenPorts := map[int]struct{}{}
 	pids := make([]int, 0)
 	seenPIDs := map[int]struct{}{}
-
 	for _, line := range lines[1:] {
 		fields := strings.Fields(line)
 		if len(fields) < 9 {
@@ -73,87 +121,74 @@ func GetListeningPorts(ctx context.Context, detailed bool) ([]PortInfo, error) {
 		}
 	}
 
-	psMap, err := batchPS(ctx, pids)
-	if err != nil {
-		return nil, fmt.Errorf("load process metadata: %w", err)
-	}
+	return entries, pids
+}
 
-	parentPSMap, err := batchParentPS(ctx, psMap)
-	if err != nil {
-		return nil, fmt.Errorf("load parent process metadata: %w", err)
-	}
-
-	cwdMap, err := batchCWD(ctx, pids)
-	if err != nil {
-		return nil, fmt.Errorf("load process directories: %w", err)
-	}
-
-	hasDocker := false
+func containsDockerProcess(entries []PortInfo) bool {
 	for _, entry := range entries {
 		if isDockerProcess(entry.ProcessName) {
-			hasDocker = true
-			break
+			return true
 		}
 	}
+	return false
+}
 
-	dockerMap := map[int]dockerInfo{}
-	if hasDocker {
-		dockerMap, _ = batchDockerInfo(ctx)
+type portMetadata struct {
+	processes map[int]psInfo
+	parents   map[int]psInfo
+	dirs      map[int]string
+	docker    map[int]dockerInfo
+}
+
+func enrichPort(entry *PortInfo, metadata portMetadata) {
+	if ps, ok := metadata.processes[entry.PID]; ok {
+		enrichPortProcess(entry, ps, metadata.parents)
 	}
+	if docker, ok := metadata.docker[entry.Port]; ok {
+		entry.ProjectName = docker.Name
+		entry.Framework = DetectFrameworkFromImage(docker.Image)
+		entry.ProcessName = "docker"
+	}
+	if cwd, ok := metadata.dirs[entry.PID]; ok {
+		enrichPortDirectory(entry, cwd)
+	}
+}
 
-	for i := range entries {
-		entry := &entries[i]
-		if ps, ok := psMap[entry.PID]; ok {
-			entry.Command = ps.Command
-			entry.ProcessName = processNameFromCommand(ps.Command, entry.ProcessName)
-			if parent, ok := parentPSMap[ps.PPID]; ok {
-				entry.ParentCommand = parent.Command
-				if label, ok := uvxProjectLabel(parent.Command); ok {
-					entry.ProjectName = label
-				}
-			}
-			entry.MemoryKB = ps.RSSKB
-			entry.Uptime = elapsedDuration(ps.Elapsed)
-			entry.Framework = DetectFrameworkFromCommand(ps.Command, entry.ProcessName)
-
-			switch {
-			case strings.Contains(ps.Stat, "Z"):
-				entry.Status = PortStatusZombie
-			case ps.PPID == 1 && IsDevProcess(entry.ProcessName, ps.Command):
-				entry.Status = PortStatusOrphaned
-			default:
-				entry.Status = PortStatusHealthy
-			}
-		}
-
-		if docker, ok := dockerMap[entry.Port]; ok {
-			entry.ProjectName = docker.Name
-			entry.Framework = DetectFrameworkFromImage(docker.Image)
-			entry.ProcessName = "docker"
-		}
-
-		if cwd, ok := cwdMap[entry.PID]; ok {
-			projectRoot := FindProjectRoot(cwd)
-			if projectRoot != "/" {
-				entry.CWD = projectRoot
-				if entry.ProjectName == "" {
-					entry.ProjectName = projectLabel(projectRoot)
-				}
-				if entry.Framework == "" {
-					entry.Framework = DetectFramework(projectRoot)
-				}
-			}
-		}
-
-		if detailed {
-			if err := enrichPortDetail(ctx, entry); err != nil {
-				return nil, err
-			}
+func enrichPortProcess(entry *PortInfo, ps psInfo, parents map[int]psInfo) {
+	entry.Command = ps.Command
+	entry.ProcessName = processNameFromCommand(ps.Command, entry.ProcessName)
+	if parent, ok := parents[ps.PPID]; ok {
+		entry.ParentCommand = parent.Command
+		if label, ok := uvxProjectLabel(parent.Command); ok {
+			entry.ProjectName = label
 		}
 	}
+	entry.MemoryKB = ps.RSSKB
+	entry.Uptime = elapsedDuration(ps.Elapsed)
+	entry.Framework = DetectFrameworkFromCommand(ps.Command, entry.ProcessName)
 
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Port < entries[j].Port })
-	return entries, nil
+	switch {
+	case strings.Contains(ps.Stat, "Z"):
+		entry.Status = PortStatusZombie
+	case ps.PPID == 1 && IsDevProcess(entry.ProcessName, ps.Command):
+		entry.Status = PortStatusOrphaned
+	default:
+		entry.Status = PortStatusHealthy
+	}
+}
+
+func enrichPortDirectory(entry *PortInfo, cwd string) {
+	projectRoot := FindProjectRoot(cwd)
+	if projectRoot == "/" {
+		return
+	}
+	entry.CWD = projectRoot
+	if entry.ProjectName == "" {
+		entry.ProjectName = projectLabel(projectRoot)
+	}
+	if entry.Framework == "" {
+		entry.Framework = DetectFramework(projectRoot)
+	}
 }
 
 // processNameFromCommand prefers ps because lsof shortens COMMAND names on macOS.
@@ -173,7 +208,10 @@ func parseListenPort(nameField string) (int, bool) {
 	}
 
 	port, err := strconv.Atoi(portText)
-	if err != nil || port <= 0 || port > 65535 {
+	if err != nil {
+		return 0, false
+	}
+	if port <= 0 || port > 65535 {
 		return 0, false
 	}
 	return port, true
@@ -198,6 +236,21 @@ func GetAllProcesses(ctx context.Context) ([]ProcessInfo, error) {
 		return nil, fmt.Errorf("list processes: %w", err)
 	}
 
+	entries, pids := parseProcesses(output)
+	cwdMap, err := batchCWD(ctx, pids)
+	if err != nil {
+		return nil, fmt.Errorf("load process directories: %w", err)
+	}
+
+	for i := range entries {
+		if cwd, ok := cwdMap[entries[i].PID]; ok {
+			enrichProcessDirectory(&entries[i], cwd)
+		}
+	}
+	return entries, nil
+}
+
+func parseProcesses(output string) ([]ProcessInfo, []int) {
 	entries := make([]ProcessInfo, 0)
 	pids := make([]int, 0)
 	for _, line := range splitLines(output) {
@@ -205,22 +258,18 @@ func GetAllProcesses(ctx context.Context) ([]ProcessInfo, error) {
 		if len(match) != 6 {
 			continue
 		}
-
 		pid, _ := strconv.Atoi(match[1])
 		if pid <= 1 {
 			continue
 		}
-		cpu, _ := strconv.ParseFloat(match[2], 64)
-		rss, _ := strconv.Atoi(match[3])
 		command := match[5]
 		parts := strings.Fields(command)
 		if len(parts) == 0 {
 			continue
 		}
 		processName := filepath.Base(parts[0])
-
-		uptime := elapsedDuration(match[4])
-
+		cpu, _ := strconv.ParseFloat(match[2], 64)
+		rss, _ := strconv.Atoi(match[3])
 		entries = append(entries, ProcessInfo{
 			PID:         pid,
 			ProcessName: processName,
@@ -229,37 +278,25 @@ func GetAllProcesses(ctx context.Context) ([]ProcessInfo, error) {
 			CPU:         cpu,
 			MemoryKB:    rss,
 			Framework:   DetectFrameworkFromCommand(command, processName),
-			Uptime:      uptime,
+			Uptime:      elapsedDuration(match[4]),
 		})
-
 		if !isDockerProcess(processName) {
 			pids = append(pids, pid)
 		}
 	}
+	return entries, pids
+}
 
-	cwdMap, err := batchCWD(ctx, pids)
-	if err != nil {
-		return nil, fmt.Errorf("load process directories: %w", err)
+func enrichProcessDirectory(entry *ProcessInfo, cwd string) {
+	projectRoot := FindProjectRoot(cwd)
+	if projectRoot == "/" {
+		return
 	}
-
-	for i := range entries {
-		entry := &entries[i]
-		cwd, ok := cwdMap[entry.PID]
-		if !ok {
-			continue
-		}
-		projectRoot := FindProjectRoot(cwd)
-		if projectRoot == "/" {
-			continue
-		}
-		entry.CWD = projectRoot
-		entry.ProjectName = projectLabel(projectRoot)
-		if entry.Framework == "" {
-			entry.Framework = DetectFramework(projectRoot)
-		}
+	entry.CWD = projectRoot
+	entry.ProjectName = projectLabel(projectRoot)
+	if entry.Framework == "" {
+		entry.Framework = DetectFramework(projectRoot)
 	}
-
-	return entries, nil
 }
 
 func FindOrphanedProcesses(ctx context.Context) ([]PortInfo, error) {
@@ -340,19 +377,7 @@ func KillProcess(pid int, force bool) error {
 }
 
 func WatchPorts(ctx context.Context, interval time.Duration, callback func(eventType string, info PortInfo)) error {
-	snapshot := func() (map[int]PortInfo, error) {
-		ports, err := GetListeningPorts(ctx, false)
-		if err != nil {
-			return nil, err
-		}
-		current := make(map[int]PortInfo, len(ports))
-		for _, port := range ports {
-			current[port.Port] = port
-		}
-		return current, nil
-	}
-
-	previous, err := snapshot()
+	previous, err := portSnapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -360,36 +385,45 @@ func WatchPorts(ctx context.Context, interval time.Duration, callback func(event
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	emit := func() error {
-		current, err := snapshot()
-		if err != nil {
-			return err
-		}
-		for _, port := range current {
-			if _, ok := previous[port.Port]; !ok {
-				callback("new", port)
-			}
-		}
-		for port, info := range previous {
-			if _, ok := current[port]; !ok {
-				callback("removed", info)
-			}
-		}
-		previous = current
-		return nil
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := emit(); err != nil {
+			current, err := portSnapshot(ctx)
+			if err != nil {
 				if ctx.Err() != nil {
 					return nil
 				}
 				return err
 			}
+			emitPortChanges(previous, current, callback)
+			previous = current
+		}
+	}
+}
+
+func portSnapshot(ctx context.Context) (map[int]PortInfo, error) {
+	ports, err := GetListeningPorts(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	current := make(map[int]PortInfo, len(ports))
+	for _, port := range ports {
+		current[port.Port] = port
+	}
+	return current, nil
+}
+
+func emitPortChanges(previous, current map[int]PortInfo, callback func(string, PortInfo)) {
+	emitMissingPorts(current, previous, "new", callback)
+	emitMissingPorts(previous, current, "removed", callback)
+}
+
+func emitMissingPorts(source, other map[int]PortInfo, kind string, callback func(string, PortInfo)) {
+	for port, info := range source {
+		if _, ok := other[port]; !ok {
+			callback(kind, info)
 		}
 	}
 }
@@ -520,34 +554,34 @@ func parseCWDOutput(output string) map[int]string {
 }
 
 func batchDockerInfo(ctx context.Context) (map[int]dockerInfo, error) {
-	result := map[int]dockerInfo{}
 	output, err := run(ctx, 5*time.Second, "docker", "ps", "--format", "{{.Ports}}\t{{.Names}}\t{{.Image}}")
 	if err != nil {
-		return result, nil
+		return map[int]dockerInfo{}, nil
 	}
+	return parseDockerInfo(output), nil
+}
 
+func parseDockerInfo(output string) map[int]dockerInfo {
+	result := map[int]dockerInfo{}
 	for _, line := range splitLines(output) {
 		parts := strings.Split(line, "\t")
 		if len(parts) != 3 {
 			continue
 		}
-		portsStr := parts[0]
-		name := parts[1]
-		image := parts[2]
-		matches := dockerPortRE.FindAllStringSubmatch(portsStr, -1)
-		for _, match := range matches {
-			if len(match) != 2 {
-				continue
-			}
-			port, err := strconv.Atoi(match[1])
-			if err != nil {
-				continue
-			}
-			result[port] = dockerInfo{Name: name, Image: image}
+		addDockerPorts(result, parts[0], dockerInfo{Name: parts[1], Image: parts[2]})
+	}
+	return result
+}
+
+func addDockerPorts(result map[int]dockerInfo, ports string, info dockerInfo) {
+	for _, match := range dockerPortRE.FindAllStringSubmatch(ports, -1) {
+		if len(match) != 2 {
+			continue
+		}
+		if port, err := strconv.Atoi(match[1]); err == nil {
+			result[port] = info
 		}
 	}
-
-	return result, nil
 }
 
 func enrichPortDetail(ctx context.Context, port *PortInfo) error {
@@ -604,6 +638,10 @@ func getProcessTree(ctx context.Context, pid int) ([]ProcessNode, error) {
 		return nil, err
 	}
 
+	return processTree(parseProcessNodes(output), pid), nil
+}
+
+func parseProcessNodes(output string) map[int]ProcessNode {
 	all := map[int]ProcessNode{}
 	for _, line := range splitLines(output) {
 		fields := strings.Fields(line)
@@ -621,7 +659,10 @@ func getProcessTree(ctx context.Context, pid int) ([]ProcessNode, error) {
 			Name: filepath.Base(strings.Join(fields[2:], " ")),
 		}
 	}
+	return all
+}
 
+func processTree(all map[int]ProcessNode, pid int) []ProcessNode {
 	tree := make([]ProcessNode, 0, 8)
 	current := pid
 	for depth := 0; current > 1 && depth < 8; depth++ {
@@ -632,7 +673,7 @@ func getProcessTree(ctx context.Context, pid int) ([]ProcessNode, error) {
 		tree = append(tree, node)
 		current = node.PPID
 	}
-	return tree, nil
+	return tree
 }
 
 func run(ctx context.Context, timeout time.Duration, name string, args ...string) (string, error) {

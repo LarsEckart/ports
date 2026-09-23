@@ -11,6 +11,63 @@ import (
 
 var packageNameRE = regexp.MustCompile(`([a-zA-Z0-9._-]+\.(js|ts|mjs|cjs|py|rb|go))`)
 
+// Detection rules stay in priority order when several names match.
+type frameworkRule struct {
+	name    string
+	markers []string
+}
+
+var imageFrameworks = []frameworkRule{
+	{"PostgreSQL", []string{"postgres"}},
+	{"Redis", []string{"redis"}},
+	{"MySQL", []string{"mysql", "mariadb"}},
+	{"MongoDB", []string{"mongo"}},
+	{"nginx", []string{"nginx"}},
+	{"LocalStack", []string{"localstack"}},
+	{"RabbitMQ", []string{"rabbitmq"}},
+	{"Kafka", []string{"kafka"}},
+	{"Elasticsearch", []string{"elasticsearch", "opensearch"}},
+	{"MinIO", []string{"minio"}},
+}
+
+var commandFrameworks = []frameworkRule{
+	{"Next.js", []string{"next"}},
+	{"Vite", []string{"vite"}},
+	{"Nuxt", []string{"nuxt"}},
+	{"Angular", []string{"angular", "ng serve"}},
+	{"Webpack", []string{"webpack"}},
+	{"Remix", []string{"remix"}},
+	{"Astro", []string{"astro"}},
+	{"Gatsby", []string{"gatsby"}},
+	{"Flask", []string{"flask"}},
+	{"Django", []string{"django", "manage.py"}},
+	{"FastAPI", []string{"uvicorn"}},
+	{"Rails", []string{"rails"}},
+	{"Rust", []string{"cargo", "rustc"}},
+}
+
+var packageFrameworks = []frameworkRule{
+	{"Next.js", []string{"next"}},
+	{"Nuxt", []string{"nuxt", "nuxt3"}},
+	{"SvelteKit", []string{"@sveltejs/kit"}},
+	{"Svelte", []string{"svelte"}},
+	{"Remix", []string{"@remix-run/react", "remix"}},
+	{"Astro", []string{"astro"}},
+	{"Vite", []string{"vite"}},
+	{"Angular", []string{"@angular/core"}},
+	{"Vue", []string{"vue"}},
+	{"React", []string{"react"}},
+	{"Express", []string{"express"}},
+	{"Fastify", []string{"fastify"}},
+	{"Hono", []string{"hono"}},
+	{"Koa", []string{"koa"}},
+	{"NestJS", []string{"nestjs", "@nestjs/core"}},
+	{"Gatsby", []string{"gatsby"}},
+	{"Webpack", []string{"webpack-dev-server"}},
+	{"esbuild", []string{"esbuild"}},
+	{"Parcel", []string{"parcel"}},
+}
+
 func IsDevPort(port PortInfo) bool {
 	if IsDevProcess(port.ProcessName, port.Command) {
 		return true
@@ -18,127 +75,135 @@ func IsDevPort(port PortInfo) bool {
 	return isUVXCommand(port.ParentCommand)
 }
 
+var systemApps = []string{
+	"spotify",
+	"raycast",
+	"tableplus",
+	"postman",
+	"linear",
+	"cursor",
+	"controlce",
+	"rapportd",
+	"slack",
+	"discord",
+	"firefox",
+	"chrome",
+	"google",
+	"safari",
+	"figma",
+	"notion",
+	"zoom",
+	"teams",
+	"code",
+	"iterm2",
+	"warp",
+	"arc",
+	"loginwindow",
+	"windowserver",
+	"systemuiserver",
+	"kernel_task",
+	"launchd",
+	"mdworker",
+	"mds_stores",
+	"cfprefsd",
+	"coreaudio",
+	"airportd",
+	"bluetoothd",
+	"sharingd",
+	"usernoted",
+	"notificationcenter",
+	"cloudd",
+}
+
+var devNames = map[string]struct{}{
+	"node":           {},
+	"python":         {},
+	"python3":        {},
+	"ruby":           {},
+	"java":           {},
+	"go":             {},
+	"cargo":          {},
+	"deno":           {},
+	"bun":            {},
+	"php":            {},
+	"uvicorn":        {},
+	"gunicorn":       {},
+	"flask":          {},
+	"rails":          {},
+	"npm":            {},
+	"npx":            {},
+	"yarn":           {},
+	"pnpm":           {},
+	"tsc":            {},
+	"tsx":            {},
+	"esbuild":        {},
+	"rollup":         {},
+	"turbo":          {},
+	"nx":             {},
+	"jest":           {},
+	"vitest":         {},
+	"mocha":          {},
+	"pytest":         {},
+	"cypress":        {},
+	"playwright":     {},
+	"rustc":          {},
+	"dotnet":         {},
+	"gradle":         {},
+	"mvn":            {},
+	"mix":            {},
+	"elixir":         {},
+	"docker":         {},
+	"docker-sandbox": {},
+}
+
+var devCommandIndicators = []*regexp.Regexp{
+	regexp.MustCompile(`\bnode\b`),
+	regexp.MustCompile(`\bnext([\s-]|$)`),
+	regexp.MustCompile(`\bvite\b`),
+	regexp.MustCompile(`\bnuxt\b`),
+	regexp.MustCompile(`\bwebpack\b`),
+	regexp.MustCompile(`\bremix\b`),
+	regexp.MustCompile(`\bastro\b`),
+	regexp.MustCompile(`\bgulp\b`),
+	regexp.MustCompile(`\bng serve\b`),
+	regexp.MustCompile(`\bgatsby\b`),
+	regexp.MustCompile(`\bflask\b`),
+	regexp.MustCompile(`\bdjango\b|manage\.py`),
+	regexp.MustCompile(`\buvicorn\b`),
+	regexp.MustCompile(`\brails\b`),
+	regexp.MustCompile(`\bcargo\b`),
+	regexp.MustCompile(`\bgo run\b`),
+}
+
 func IsDevProcess(processName, command string) bool {
 	name := strings.ToLower(strings.TrimSpace(processName))
-	cmd := strings.ToLower(command)
-
-	systemApps := []string{
-		"spotify",
-		"raycast",
-		"tableplus",
-		"postman",
-		"linear",
-		"cursor",
-		"controlce",
-		"rapportd",
-		"slack",
-		"discord",
-		"firefox",
-		"chrome",
-		"google",
-		"safari",
-		"figma",
-		"notion",
-		"zoom",
-		"teams",
-		"code",
-		"iterm2",
-		"warp",
-		"arc",
-		"loginwindow",
-		"windowserver",
-		"systemuiserver",
-		"kernel_task",
-		"launchd",
-		"mdworker",
-		"mds_stores",
-		"cfprefsd",
-		"coreaudio",
-		"airportd",
-		"bluetoothd",
-		"sharingd",
-		"usernoted",
-		"notificationcenter",
-		"cloudd",
-	}
-	for _, app := range systemApps {
-		if strings.HasPrefix(name, app) {
-			return false
-		}
-	}
-
-	devNames := map[string]struct{}{
-		"node":           {},
-		"python":         {},
-		"python3":        {},
-		"ruby":           {},
-		"java":           {},
-		"go":             {},
-		"cargo":          {},
-		"deno":           {},
-		"bun":            {},
-		"php":            {},
-		"uvicorn":        {},
-		"gunicorn":       {},
-		"flask":          {},
-		"rails":          {},
-		"npm":            {},
-		"npx":            {},
-		"yarn":           {},
-		"pnpm":           {},
-		"tsc":            {},
-		"tsx":            {},
-		"esbuild":        {},
-		"rollup":         {},
-		"turbo":          {},
-		"nx":             {},
-		"jest":           {},
-		"vitest":         {},
-		"mocha":          {},
-		"pytest":         {},
-		"cypress":        {},
-		"playwright":     {},
-		"rustc":          {},
-		"dotnet":         {},
-		"gradle":         {},
-		"mvn":            {},
-		"mix":            {},
-		"elixir":         {},
-		"docker":         {},
-		"docker-sandbox": {},
+	if hasAnyPrefix(name, systemApps) {
+		return false
 	}
 	if _, ok := devNames[name]; ok {
 		return true
 	}
-
-	if strings.HasPrefix(name, "python") || strings.HasPrefix(name, "com.docke") || strings.HasPrefix(name, "docker") {
+	if hasAnyPrefix(name, []string{"python", "com.docke", "docker"}) {
 		return true
 	}
+	return hasDevCommandIndicator(strings.ToLower(command))
+}
 
-	indicators := []*regexp.Regexp{
-		regexp.MustCompile(`\bnode\b`),
-		regexp.MustCompile(`\bnext([\s-]|$)`),
-		regexp.MustCompile(`\bvite\b`),
-		regexp.MustCompile(`\bnuxt\b`),
-		regexp.MustCompile(`\bwebpack\b`),
-		regexp.MustCompile(`\bremix\b`),
-		regexp.MustCompile(`\bastro\b`),
-		regexp.MustCompile(`\bgulp\b`),
-		regexp.MustCompile(`\bng serve\b`),
-		regexp.MustCompile(`\bgatsby\b`),
-		regexp.MustCompile(`\bflask\b`),
-		regexp.MustCompile(`\bdjango\b|manage\.py`),
-		regexp.MustCompile(`\buvicorn\b`),
-		regexp.MustCompile(`\brails\b`),
-		regexp.MustCompile(`\bcargo\b`),
-		regexp.MustCompile(`\bgo run\b`),
-	}
-	for _, re := range indicators {
-		if re.MatchString(cmd) {
+func hasAnyPrefix(name string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(name, prefix) {
 			return true
 		}
 	}
+	return false
+}
 
+func hasDevCommandIndicator(command string) bool {
+	for _, re := range devCommandIndicators {
+		if re.MatchString(command) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -162,43 +227,43 @@ func uvxPackageName(command string) (string, bool) {
 		if name == "uvx" {
 			return uvxPackageNameFromArgs(fields[i+1:])
 		}
-		if name == "uv" && i+2 < len(fields) && strings.ToLower(fields[i+1]) == "tool" && strings.ToLower(fields[i+2]) == "uvx" {
+		if name == "uv" && isUVToolUVX(fields[i+1:]) {
 			return uvxPackageNameFromArgs(fields[i+3:])
 		}
 	}
 	return "", false
 }
 
+func isUVToolUVX(args []string) bool {
+	return len(args) >= 2 && strings.ToLower(args[0]) == "tool" && strings.ToLower(args[1]) == "uvx"
+}
+
 func uvxPackageNameFromArgs(args []string) (string, bool) {
 	for i := 0; i < len(args); i++ {
 		arg := strings.TrimSpace(args[i])
-		if arg == "" {
+		switch {
+		case arg == "":
 			continue
-		}
-		if arg == "--" {
-			if i+1 >= len(args) {
-				return "", false
-			}
-			return cleanUVXPackageName(args[i+1])
-		}
-		if value, ok := strings.CutPrefix(arg, "--from="); ok {
-			return cleanUVXPackageName(value)
-		}
-		if arg == "--from" {
-			if i+1 >= len(args) {
-				return "", false
-			}
-			return cleanUVXPackageName(args[i+1])
-		}
-		if strings.HasPrefix(arg, "-") {
+		case arg == "--" || arg == "--from":
+			return uvxNextPackage(args, i)
+		case strings.HasPrefix(arg, "--from="):
+			return cleanUVXPackageName(strings.TrimPrefix(arg, "--from="))
+		case strings.HasPrefix(arg, "-"):
 			if uvxOptionTakesValue(arg) {
 				i++
 			}
-			continue
+		default:
+			return cleanUVXPackageName(arg)
 		}
-		return cleanUVXPackageName(arg)
 	}
 	return "", false
+}
+
+func uvxNextPackage(args []string, index int) (string, bool) {
+	if index+1 >= len(args) {
+		return "", false
+	}
+	return cleanUVXPackageName(args[index+1])
 }
 
 func uvxOptionTakesValue(option string) bool {
@@ -262,33 +327,10 @@ func cleanUVXPackageName(value string) (string, bool) {
 }
 
 func DetectFrameworkFromImage(image string) string {
-	img := strings.ToLower(image)
-	switch {
-	case img == "":
-		return "Docker"
-	case strings.Contains(img, "postgres"):
-		return "PostgreSQL"
-	case strings.Contains(img, "redis"):
-		return "Redis"
-	case strings.Contains(img, "mysql"), strings.Contains(img, "mariadb"):
-		return "MySQL"
-	case strings.Contains(img, "mongo"):
-		return "MongoDB"
-	case strings.Contains(img, "nginx"):
-		return "nginx"
-	case strings.Contains(img, "localstack"):
-		return "LocalStack"
-	case strings.Contains(img, "rabbitmq"):
-		return "RabbitMQ"
-	case strings.Contains(img, "kafka"):
-		return "Kafka"
-	case strings.Contains(img, "elasticsearch"), strings.Contains(img, "opensearch"):
-		return "Elasticsearch"
-	case strings.Contains(img, "minio"):
-		return "MinIO"
-	default:
-		return "Docker"
+	if name := frameworkContaining(strings.ToLower(image), imageFrameworks); name != "" {
+		return name
 	}
+	return "Docker"
 }
 
 func FindProjectRoot(dir string) string {
@@ -325,119 +367,86 @@ func projectLabel(projectRoot string) string {
 	projectRoot = filepath.Clean(projectRoot)
 	name := filepath.Base(projectRoot)
 	parent := filepath.Base(filepath.Dir(projectRoot))
-	if projectRoot == string(filepath.Separator) || parent == string(filepath.Separator) || parent == "." {
+	if projectRoot == string(filepath.Separator) || isRootParent(parent) {
 		return name
 	}
 	return filepath.Join(parent, name)
 }
 
-func DetectFramework(projectRoot string) string {
-	pkgPath := filepath.Join(projectRoot, "package.json")
-	if data, err := os.ReadFile(pkgPath); err == nil {
-		var pkg struct {
-			Dependencies    map[string]string `json:"dependencies"`
-			DevDependencies map[string]string `json:"devDependencies"`
-		}
-		if err := json.Unmarshal(data, &pkg); err == nil {
-			deps := map[string]string{}
-			maps.Copy(deps, pkg.Dependencies)
-			maps.Copy(deps, pkg.DevDependencies)
+func isRootParent(parent string) bool {
+	return parent == string(filepath.Separator) || parent == "."
+}
 
-			switch {
-			case hasDep(deps, "next"):
-				return "Next.js"
-			case hasDep(deps, "nuxt") || hasDep(deps, "nuxt3"):
-				return "Nuxt"
-			case hasDep(deps, "@sveltejs/kit"):
-				return "SvelteKit"
-			case hasDep(deps, "svelte"):
-				return "Svelte"
-			case hasDep(deps, "@remix-run/react") || hasDep(deps, "remix"):
-				return "Remix"
-			case hasDep(deps, "astro"):
-				return "Astro"
-			case hasDep(deps, "vite"):
-				return "Vite"
-			case hasDep(deps, "@angular/core"):
-				return "Angular"
-			case hasDep(deps, "vue"):
-				return "Vue"
-			case hasDep(deps, "react"):
-				return "React"
-			case hasDep(deps, "express"):
-				return "Express"
-			case hasDep(deps, "fastify"):
-				return "Fastify"
-			case hasDep(deps, "hono"):
-				return "Hono"
-			case hasDep(deps, "koa"):
-				return "Koa"
-			case hasDep(deps, "nestjs") || hasDep(deps, "@nestjs/core"):
-				return "NestJS"
-			case hasDep(deps, "gatsby"):
-				return "Gatsby"
-			case hasDep(deps, "webpack-dev-server"):
-				return "Webpack"
-			case hasDep(deps, "esbuild"):
-				return "esbuild"
-			case hasDep(deps, "parcel"):
-				return "Parcel"
+func DetectFramework(projectRoot string) string {
+	if framework := frameworkFromPackageJSON(filepath.Join(projectRoot, "package.json")); framework != "" {
+		return framework
+	}
+	return frameworkFromProjectFiles(projectRoot)
+}
+
+func frameworkFromPackageJSON(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var pkg struct {
+		Dependencies    map[string]string `json:"dependencies"`
+		DevDependencies map[string]string `json:"devDependencies"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return ""
+	}
+	deps := map[string]string{}
+	maps.Copy(deps, pkg.Dependencies)
+	maps.Copy(deps, pkg.DevDependencies)
+
+	for _, framework := range packageFrameworks {
+		for _, dep := range framework.markers {
+			if hasDep(deps, dep) {
+				return framework.name
 			}
 		}
 	}
+	return ""
+}
 
-	switch {
-	case fileExists(filepath.Join(projectRoot, "vite.config.ts")) || fileExists(filepath.Join(projectRoot, "vite.config.js")):
-		return "Vite"
-	case fileExists(filepath.Join(projectRoot, "next.config.js")) || fileExists(filepath.Join(projectRoot, "next.config.mjs")):
-		return "Next.js"
-	case fileExists(filepath.Join(projectRoot, "angular.json")):
-		return "Angular"
-	case fileExists(filepath.Join(projectRoot, "Cargo.toml")):
-		return "Rust"
-	case fileExists(filepath.Join(projectRoot, "go.mod")):
-		return "Go"
-	case fileExists(filepath.Join(projectRoot, "manage.py")):
-		return "Django"
-	case fileExists(filepath.Join(projectRoot, "Gemfile")):
-		return "Ruby"
-	default:
-		return ""
+var projectFileFrameworks = []frameworkRule{
+	{"Vite", []string{"vite.config.ts", "vite.config.js"}},
+	{"Next.js", []string{"next.config.js", "next.config.mjs"}},
+	{"Angular", []string{"angular.json"}},
+	{"Rust", []string{"Cargo.toml"}},
+	{"Go", []string{"go.mod"}},
+	{"Django", []string{"manage.py"}},
+	{"Ruby", []string{"Gemfile"}},
+}
+
+func frameworkFromProjectFiles(projectRoot string) string {
+	for _, framework := range projectFileFrameworks {
+		for _, filename := range framework.markers {
+			if fileExists(filepath.Join(projectRoot, filename)) {
+				return framework.name
+			}
+		}
 	}
+	return ""
 }
 
 func DetectFrameworkFromCommand(command, processName string) string {
-	cmd := strings.ToLower(command)
-	switch {
-	case strings.Contains(cmd, "next"):
-		return "Next.js"
-	case strings.Contains(cmd, "vite"):
-		return "Vite"
-	case strings.Contains(cmd, "nuxt"):
-		return "Nuxt"
-	case strings.Contains(cmd, "angular") || strings.Contains(cmd, "ng serve"):
-		return "Angular"
-	case strings.Contains(cmd, "webpack"):
-		return "Webpack"
-	case strings.Contains(cmd, "remix"):
-		return "Remix"
-	case strings.Contains(cmd, "astro"):
-		return "Astro"
-	case strings.Contains(cmd, "gatsby"):
-		return "Gatsby"
-	case strings.Contains(cmd, "flask"):
-		return "Flask"
-	case strings.Contains(cmd, "django") || strings.Contains(cmd, "manage.py"):
-		return "Django"
-	case strings.Contains(cmd, "uvicorn"):
-		return "FastAPI"
-	case strings.Contains(cmd, "rails"):
-		return "Rails"
-	case strings.Contains(cmd, "cargo"), strings.Contains(cmd, "rustc"):
-		return "Rust"
-	default:
-		return DetectFrameworkFromName(processName)
+	if name := frameworkContaining(strings.ToLower(command), commandFrameworks); name != "" {
+		return name
 	}
+	return DetectFrameworkFromName(processName)
+}
+
+func frameworkContaining(text string, rules []frameworkRule) string {
+	for _, rule := range rules {
+		for _, marker := range rule.markers {
+			if strings.Contains(text, marker) {
+				return rule.name
+			}
+		}
+	}
+	return ""
 }
 
 func DetectFrameworkFromName(processName string) string {
@@ -464,13 +473,7 @@ func SummarizeCommand(command, processName string) string {
 		if i == 0 || strings.HasPrefix(part, "-") {
 			continue
 		}
-		if strings.Contains(part, "/") {
-			meaningful = append(meaningful, filepath.Base(part))
-		} else if match := packageNameRE.FindStringSubmatch(part); len(match) > 1 {
-			meaningful = append(meaningful, match[1])
-		} else {
-			meaningful = append(meaningful, part)
-		}
+		meaningful = append(meaningful, commandPartLabel(part))
 		if len(meaningful) >= 3 {
 			break
 		}
@@ -479,6 +482,16 @@ func SummarizeCommand(command, processName string) string {
 		return strings.Join(meaningful, " ")
 	}
 	return processName
+}
+
+func commandPartLabel(part string) string {
+	if strings.Contains(part, "/") {
+		return filepath.Base(part)
+	}
+	if match := packageNameRE.FindStringSubmatch(part); len(match) > 1 {
+		return match[1]
+	}
+	return part
 }
 
 func hasDep(deps map[string]string, name string) bool {

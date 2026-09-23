@@ -146,6 +146,24 @@ func TestDetectFrameworkFromCommand(t *testing.T) {
 	}
 }
 
+func TestFrameworkDetectionKeepsPriority(t *testing.T) {
+	if got := DetectFrameworkFromImage("redis-postgres"); got != "PostgreSQL" {
+		t.Fatalf("image priority: got %q", got)
+	}
+	if got := DetectFrameworkFromCommand("vite next", "node"); got != "Next.js" {
+		t.Fatalf("command priority: got %q", got)
+	}
+
+	dir := t.TempDir()
+	packageJSON := `{"dependencies":{"react":"latest","next":"latest"}}`
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(packageJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := DetectFramework(dir); got != "Next.js" {
+		t.Fatalf("dependency priority: got %q", got)
+	}
+}
+
 func TestDetectFramework(t *testing.T) {
 	dir := t.TempDir()
 	packageJSON := `{
