@@ -52,40 +52,7 @@ func TestKillByPort(t *testing.T) {
 }
 
 func TestKillRequiresDisambiguationWhenPortAndPIDConflict(t *testing.T) {
-	python, err := exec.LookPath("python3")
-	if err != nil {
-		t.Skip("python3 not available")
-	}
-
-	pidProcess := exec.CommandContext(t.Context(), "sleep", "30")
-	if err := pidProcess.Start(); err != nil {
-		t.Fatalf("failed to start pid target: %v", err)
-	}
-	defer func() {
-		if pidProcess.Process != nil {
-			_ = pidProcess.Process.Kill()
-			_, _ = pidProcess.Process.Wait()
-		}
-	}()
-
-	target := pidProcess.Process.Pid
-	if target > 65535 {
-		t.Skipf("pid %d is outside the TCP port range", target)
-	}
-
-	listener := exec.CommandContext(t.Context(), python, "-m", "http.server", fmt.Sprintf("%d", target), "--bind", "127.0.0.1")
-	if err := listener.Start(); err != nil {
-		t.Skipf("failed to bind listener on port %d: %v", target, err)
-	}
-	defer func() {
-		if listener.Process != nil {
-			_ = listener.Process.Kill()
-			_, _ = listener.Process.Wait()
-		}
-	}()
-
-	waitForPort(t, target, 5*time.Second)
-
+	target := startConflictingTargets(t)
 	stdout, stderr, exitCode := runCLI(t, "kill", fmt.Sprintf("%d", target))
 	if exitCode == 0 {
 		t.Fatalf("expected ambiguity to fail, stdout=%s stderr=%s", stdout, stderr)
@@ -102,4 +69,34 @@ func TestKillRequiresDisambiguationWhenPortAndPIDConflict(t *testing.T) {
 		t.Fatalf("expected listener on port %d to still be alive after ambiguous kill attempt: %v", target, err)
 	}
 	_ = conn.Close()
+}
+
+func startConflictingTargets(t *testing.T) int {
+	t.Helper()
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not available")
+	}
+	pidProcess := exec.CommandContext(t.Context(), "sleep", "30")
+	if err := pidProcess.Start(); err != nil {
+		t.Fatalf("failed to start pid target: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = pidProcess.Process.Kill()
+		_, _ = pidProcess.Process.Wait()
+	})
+	target := pidProcess.Process.Pid
+	if target > 65535 {
+		t.Skipf("pid %d is outside the TCP port range", target)
+	}
+	listener := exec.CommandContext(t.Context(), python, "-m", "http.server", fmt.Sprintf("%d", target), "--bind", "127.0.0.1")
+	if err := listener.Start(); err != nil {
+		t.Skipf("failed to bind listener on port %d: %v", target, err)
+	}
+	t.Cleanup(func() {
+		_ = listener.Process.Kill()
+		_, _ = listener.Process.Wait()
+	})
+	waitForPort(t, target, 5*time.Second)
+	return target
 }
