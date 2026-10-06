@@ -110,7 +110,7 @@ func filterDevPorts(ports []scanner.PortInfo) []scanner.PortInfo {
 func filterDevProcesses(processes []scanner.ProcessInfo) []scanner.ProcessInfo {
 	filtered := make([]scanner.ProcessInfo, 0, len(processes))
 	for _, process := range processes {
-		if scanner.IsDevProcess(process.ProcessName, process.Command) {
+		if scanner.IsDevProcess(process.ProcessName, process.Command) || process.BuiltInProject() {
 			filtered = append(filtered, process)
 		}
 	}

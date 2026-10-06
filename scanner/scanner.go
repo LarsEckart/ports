@@ -141,7 +141,8 @@ type portMetadata struct {
 }
 
 func enrichPort(entry *PortInfo, metadata portMetadata) {
-	if ps, ok := metadata.processes[entry.PID]; ok {
+	ps, hasProcess := metadata.processes[entry.PID]
+	if hasProcess {
 		enrichPortProcess(entry, ps, metadata.parents)
 	}
 	if docker, ok := metadata.docker[entry.Port]; ok {
@@ -151,6 +152,24 @@ func enrichPort(entry *PortInfo, metadata portMetadata) {
 	}
 	if cwd, ok := metadata.dirs[entry.PID]; ok {
 		enrichPortDirectory(entry, cwd)
+	}
+	if hasProcess {
+		// Status runs last: a binary built inside the project only counts as a dev
+		// process once the project directory is known.
+		entry.Status = portStatus(*entry, ps)
+	}
+}
+
+// portStatus classifies a listener. A dev process whose parent is gone was left
+// behind by a stopped shell; a zombie has exited but was never reaped.
+func portStatus(entry PortInfo, ps psInfo) PortStatus {
+	switch {
+	case strings.Contains(ps.Stat, "Z"):
+		return PortStatusZombie
+	case ps.PPID == 1 && IsDevPort(entry):
+		return PortStatusOrphaned
+	default:
+		return PortStatusHealthy
 	}
 }
 
@@ -166,15 +185,6 @@ func enrichPortProcess(entry *PortInfo, ps psInfo, parents map[int]psInfo) {
 	entry.MemoryKB = ps.RSSKB
 	entry.Uptime = elapsedDuration(ps.Elapsed)
 	entry.Framework = DetectFrameworkFromCommand(ps.Command, entry.ProcessName)
-
-	switch {
-	case strings.Contains(ps.Stat, "Z"):
-		entry.Status = PortStatusZombie
-	case ps.PPID == 1 && IsDevProcess(entry.ProcessName, ps.Command):
-		entry.Status = PortStatusOrphaned
-	default:
-		entry.Status = PortStatusHealthy
-	}
 }
 
 func enrichPortDirectory(entry *PortInfo, cwd string) {

@@ -197,6 +197,115 @@ func TestProjectLabel(t *testing.T) {
 	}
 }
 
+func TestPortBuiltInProject(t *testing.T) {
+	root := "/Users/lars/GitHub/SmellCheck"
+	tests := []struct {
+		name string
+		port PortInfo
+		want bool
+	}{
+		{
+			name: "relative build path inside the project",
+			port: PortInfo{CWD: root, Command: "build/smellcheck --port 8000"},
+			want: true,
+		},
+		{
+			name: "absolute build path inside the project",
+			port: PortInfo{CWD: root, Command: root + "/build/smellcheck"},
+			want: true,
+		},
+		{
+			name: "installed binary outside the project",
+			port: PortInfo{CWD: root, Command: "/opt/homebrew/bin/node server.js"},
+			want: false,
+		},
+		{
+			name: "bare name goes through PATH lookup",
+			port: PortInfo{CWD: root, Command: "smellcheck"},
+			want: false,
+		},
+		{
+			name: "sibling directory outside the project",
+			port: PortInfo{CWD: root, Command: "../other/build/app"},
+			want: false,
+		},
+		{
+			name: "unknown project directory",
+			port: PortInfo{Command: "build/smellcheck"},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.port.BuiltInProject(); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+
+	process := ProcessInfo{CWD: root, Command: "build/smellcheck"}
+	if !process.BuiltInProject() {
+		t.Fatal("expected a process entry to count as built in project")
+	}
+}
+
+func TestFindProjectRootStopsAtHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	// A stray manifest in home must not claim every process as a project.
+	if err := os.WriteFile(filepath.Join(home, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("failed to write package.json: %v", err)
+	}
+	work := filepath.Join(home, "scratch", "app")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatalf("failed to create work dir: %v", err)
+	}
+
+	if got := FindProjectRoot(work); got != work {
+		t.Fatalf("expected %q, got %q", work, got)
+	}
+}
+
+func TestFindProjectRootDetectsRepoAndRocApp(t *testing.T) {
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatalf("failed to create .git: %v", err)
+	}
+	nested := filepath.Join(repo, "internal", "server")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("failed to create nested dirs: %v", err)
+	}
+	if got := FindProjectRoot(nested); got != repo {
+		t.Fatalf("repo root: expected %q, got %q", repo, got)
+	}
+
+	rocApp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rocApp, "app"), 0o755); err != nil {
+		t.Fatalf("failed to create app dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(rocApp, "app", "main.roc"), []byte("app \"demo\"\n"), 0o644); err != nil {
+		t.Fatalf("failed to write app/main.roc: %v", err)
+	}
+	if got := FindProjectRoot(filepath.Join(rocApp, "build")); got != rocApp {
+		t.Fatalf("roc root: expected %q, got %q", rocApp, got)
+	}
+}
+
+func TestDetectFrameworkDetectsRoc(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "app"), 0o755); err != nil {
+		t.Fatalf("failed to create app dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "app", "main.roc"), []byte("app \"demo\"\n"), 0o644); err != nil {
+		t.Fatalf("failed to write app/main.roc: %v", err)
+	}
+
+	if got := DetectFramework(dir); got != "Roc" {
+		t.Fatalf("expected Roc, got %q", got)
+	}
+}
+
 func TestFindProjectRoot(t *testing.T) {
 	root := t.TempDir()
 	nested := filepath.Join(root, "a", "b", "c")

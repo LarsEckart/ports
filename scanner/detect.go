@@ -72,7 +72,56 @@ func IsDevPort(port PortInfo) bool {
 	if IsDevProcess(port.ProcessName, port.Command) {
 		return true
 	}
-	return isUVXCommand(port.ParentCommand)
+	if isUVXCommand(port.ParentCommand) {
+		return true
+	}
+	return port.BuiltInProject()
+}
+
+// projectBinary is the command a process runs and the project directory it
+// started in.
+type projectBinary struct {
+	cwd     string
+	command string
+}
+
+// BuiltInProject reports whether the port runs a binary that lives inside its
+// own project directory, such as build/smellcheck or target/debug/server. These
+// are apps built from source, so they count as dev processes even when the
+// binary name says nothing about the language.
+func (p PortInfo) BuiltInProject() bool {
+	return projectBinary{cwd: p.CWD, command: p.Command}.isBuilt()
+}
+
+// BuiltInProject reports whether the process runs a binary that lives inside its
+// own project directory. See PortInfo.BuiltInProject for what counts.
+func (p ProcessInfo) BuiltInProject() bool {
+	return projectBinary{cwd: p.CWD, command: p.Command}.isBuilt()
+}
+
+func (b projectBinary) isBuilt() bool {
+	if b.cwd == "" {
+		return false
+	}
+	fields := strings.Fields(b.command)
+	if len(fields) == 0 {
+		return false
+	}
+
+	binary := fields[0]
+	// A bare name is looked up on PATH, so its location is unknown.
+	if !strings.ContainsRune(binary, filepath.Separator) {
+		return false
+	}
+	if !filepath.IsAbs(binary) {
+		binary = filepath.Join(b.cwd, binary)
+	}
+
+	relative, err := filepath.Rel(b.cwd, binary)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 var systemApps = []string{
@@ -333,20 +382,36 @@ func DetectFrameworkFromImage(image string) string {
 	return "Docker"
 }
 
+// projectMarkers are the files and folders that mark a project root. A manifest
+// is the strongest signal, but a repo or a Roc app also marks a root on its own.
+var projectMarkers = []string{
+	"package.json",
+	"Cargo.toml",
+	"go.mod",
+	"pyproject.toml",
+	"Gemfile",
+	"pom.xml",
+	"build.gradle",
+	".git",
+	// Roc apps keep their entry point in main.roc, at the root or under app/.
+	"main.roc",
+	"app.roc",
+	filepath.Join("app", "main.roc"),
+}
+
+// FindProjectRoot walks up from dir until it finds a project marker. The walk
+// stops at the home directory, because files that land in home, such as a
+// package.json from a tool, would otherwise label every unrelated process with
+// the home directory as its project.
 func FindProjectRoot(dir string) string {
-	markers := []string{
-		"package.json",
-		"Cargo.toml",
-		"go.mod",
-		"pyproject.toml",
-		"Gemfile",
-		"pom.xml",
-		"build.gradle",
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
 	}
 
 	current := dir
-	for depth := 0; current != "/" && depth < 15; depth++ {
-		for _, marker := range markers {
+	for depth := 0; current != "/" && current != home && depth < 15; depth++ {
+		for _, marker := range projectMarkers {
 			if _, err := os.Stat(filepath.Join(current, marker)); err == nil {
 				return current
 			}
@@ -411,6 +476,7 @@ func frameworkFromPackageJSON(path string) string {
 }
 
 var projectFileFrameworks = []frameworkRule{
+	{"Roc", []string{"main.roc", "app.roc", filepath.Join("app", "main.roc")}},
 	{"Vite", []string{"vite.config.ts", "vite.config.js"}},
 	{"Next.js", []string{"next.config.js", "next.config.mjs"}},
 	{"Angular", []string{"angular.json"}},

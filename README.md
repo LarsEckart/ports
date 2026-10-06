@@ -8,14 +8,14 @@ It is very much inspired by [port-whisperer](https://github.com/LarsenCundric/po
 
 ## Features
 
-- dev-focused port list by default
+- dev-focused port list by default: dev commands, `uvx` launches, and binaries built inside their own project
 - `--all` mode for everything listening
 - inspect a single port with project path, git branch, memory, uptime, and process tree
 - `ps` view for developer processes
 - `kill` by port or PID, with `--port` / `--pid` when a number is ambiguous
 - `clean` orphaned/zombie dev processes
 - `watch` for port changes
-- framework detection for common JS, Python, Go, and Docker workloads
+- framework detection for common JS, Python, Roc, Go, and Docker workloads
 
 ## Installation
 
