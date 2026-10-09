@@ -9,6 +9,7 @@ It is very much inspired by [port-whisperer](https://github.com/LarsenCundric/po
 ## Features
 
 - dev-focused port list by default: dev commands, `uvx` launches, and binaries built inside their own project
+- per-process memory snapshot (RSS) in the port list; ports sharing a PID show the same memory, not separate amounts
 - `--all` mode for everything listening
 - inspect a single port with project path, git branch, memory, uptime, and process tree
 - `ps` view for developer processes

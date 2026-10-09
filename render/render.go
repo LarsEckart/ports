@@ -95,6 +95,7 @@ func DisplayPortTable(w io.Writer, ports []scanner.PortInfo, filtered bool) {
 			whiteStyle.Bold(true).Render(fmt.Sprintf(":%d", port.Port)),
 			whiteStyle.Render(orDash(truncate(port.ProcessName, processNameMaxWidth))),
 			mutedStyle.Render(fmt.Sprintf("%d", port.PID)),
+			styledMemory(port.MemoryKB),
 			styledProject(port.ProjectName),
 			formatFramework(port.Framework),
 			styledUptime(port.Uptime),
@@ -102,7 +103,7 @@ func DisplayPortTable(w io.Writer, ports []scanner.PortInfo, filtered bool) {
 		})
 	}
 
-	headers := []string{"PORT", "PROCESS", "PID", "PROJECT", "FRAMEWORK", "UPTIME", "STATUS"}
+	headers := []string{"PORT", "PROCESS", "PID", "MEM", "PROJECT", "FRAMEWORK", "UPTIME", "STATUS"}
 	fprintln(w, renderTable(headers, rows))
 	fprintln(w)
 

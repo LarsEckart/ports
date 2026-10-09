@@ -1,12 +1,46 @@
 package render
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/LarsEckart/ports/scanner"
 )
+
+func TestDisplayPortTableMemory(t *testing.T) {
+	var output bytes.Buffer
+	DisplayPortTable(&output, []scanner.PortInfo{
+		{Port: 3000, PID: 42, ProcessName: "node", MemoryKB: 128 * 1024},
+		{Port: 3001, PID: 42, ProcessName: "node", MemoryKB: 128 * 1024},
+		{Port: 4000, PID: 43, ProcessName: "python"},
+	}, false)
+
+	var rows [][]string
+	for _, line := range strings.Split(output.String(), "\n") {
+		if strings.Count(line, "│") == 9 {
+			cells := strings.Split(line, "│")
+			for i := range cells {
+				cells[i] = strings.TrimSpace(cells[i])
+			}
+			rows = append(rows, cells)
+		}
+	}
+	if len(rows) != 4 {
+		t.Fatalf("got %d table rows, want header and 3 port rows: %s", len(rows), output.String())
+	}
+	for i, want := range []string{"MEM", "128.0 MB", "128.0 MB", "—"} {
+		if len(rows[i]) != 10 {
+			t.Fatalf("row %d has unexpected cells: %v", i, rows[i])
+		}
+		if got := rows[i][4]; got != want {
+			t.Errorf("row %d memory = %q, want %q", i, got, want)
+		}
+	}
+}
 
 func TestRenderTableWidthsAndBorders(t *testing.T) {
 	headers := []string{"PORT", "NAME"}
